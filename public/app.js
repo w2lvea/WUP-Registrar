@@ -309,10 +309,21 @@ async function handleUnifiedLogin(e) {
   const errBox = document.getElementById('loginError');
   errBox.classList.add('hidden');
 
+  const submitBtn = e.target.querySelector('button[type="submit"]') || e.submitter;
+  const originalText = submitBtn ? submitBtn.innerHTML : 'Sign in';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Signing in...';
+  }
+
   try {
     currentUser = await apiRequest('POST', '/login', { username: u, password: p });
   } catch (err) {
     errBox.classList.remove('hidden');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalText;
+    }
     return;
   }
 
@@ -322,6 +333,11 @@ async function handleUnifiedLogin(e) {
     await refreshRequestsData();
     await loadReference();
   } catch (err) { /* dashboards show an empty state */ }
+
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalText;
+  }
 
   // Anyone (student or registrar staff) still on a default password must set a real one first.
   if (currentUser.mustChangePassword) {
