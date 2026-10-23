@@ -16,6 +16,8 @@ if (DATABASE_URL) {
   // Supabase (PostgreSQL) Mode
   // =============================================================
   const { Pool, types } = require('pg');
+  const { AsyncLocalStorage } = require('async_hooks');
+  const txStorage = new AsyncLocalStorage();
 
   // Parse BIGINT (type 20) as integer so counts & timestamps are JS numbers
   types.setTypeParser(20, val => (val === null ? null : parseInt(val, 10)));
@@ -25,10 +27,20 @@ if (DATABASE_URL) {
   const pool = new Pool({
     connectionString: DATABASE_URL,
     ssl: { rejectUnauthorized: false },
-    max: 10,
-    idleTimeoutMillis: 30000,
+    max: process.env.VERCEL ? 3 : 10,
+    idleTimeoutMillis: 15000,
     connectionTimeoutMillis: 5000
   });
+
+  // Guard against unhandled error events when idle connections are closed by Supabase
+  pool.on('error', (err) => {
+    console.error('[Supabase Pool Warning]', err.message);
+  });
+
+  function getExecutor() {
+    const store = txStorage.getStore();
+    return (store && store.client) || pool;
+  }
 
   function toPgSql(sql) {
     let i = 1;
@@ -36,7 +48,12 @@ if (DATABASE_URL) {
     let out = '';
     for (let j = 0; j < sql.length; j++) {
       const char = sql[j];
-      if (char === "'" && (j === 0 || sql[j - 1] !== '\\')) {
+      if (char === "'") {
+        if (inStr && sql[j + 1] === "'") {
+          out += "''";
+          j++;
+          continue;
+        }
         inStr = !inStr;
         out += char;
       } else if (char === '?' && !inStr) {
@@ -64,17 +81,17 @@ if (DATABASE_URL) {
       return {
         async get(...args) {
           const flatArgs = args.flat();
-          const res = await pool.query(pgSql, flatArgs);
+          const res = await getExecutor().query(pgSql, flatArgs);
           return res.rows[0] || null;
         },
         async all(...args) {
           const flatArgs = args.flat();
-          const res = await pool.query(pgSql, flatArgs);
+          const res = await getExecutor().query(pgSql, flatArgs);
           return res.rows;
         },
         async run(...args) {
           const flatArgs = args.flat();
-          const res = await pool.query(pgSql, flatArgs);
+          const res = await getExecutor().query(pgSql, flatArgs);
           return {
             changes: res.rowCount || 0,
             lastInsertRowid: res.rows[0]?.id || null
@@ -84,11 +101,50 @@ if (DATABASE_URL) {
     },
     async query(sql, params = []) {
       const pgSql = toPgSql(sql);
-      const res = await pool.query(pgSql, params.flat());
+      const res = await getExecutor().query(pgSql, params.flat());
       return res.rows;
     },
     async exec(sql) {
-      await pool.query(sql);
+      const trimmed = sql.trim().toUpperCase();
+      if (trimmed === 'BEGIN') {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          txStorage.enterWith({ client });
+        } catch (err) {
+          client.release();
+          throw err;
+        }
+        return;
+      }
+
+      const store = txStorage.getStore();
+      if (trimmed === 'COMMIT') {
+        if (store && store.client) {
+          try {
+            await store.client.query('COMMIT');
+          } finally {
+            store.client.release();
+            txStorage.enterWith({});
+          }
+        }
+        return;
+      }
+
+      if (trimmed === 'ROLLBACK') {
+        if (store && store.client) {
+          try {
+            await store.client.query('ROLLBACK');
+          } catch (_) {
+          } finally {
+            store.client.release();
+            txStorage.enterWith({});
+          }
+        }
+        return;
+      }
+
+      await getExecutor().query(sql);
     }
   };
 } else if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {

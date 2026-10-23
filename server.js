@@ -363,9 +363,23 @@ async function addTimelineAndStatus(ref, status, title) {
 async function nextRef() {
   const year = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', year: 'numeric' }).format(new Date());
   const prefix = `DOC-${year}-`;
-  const res = await db.prepare('SELECT COUNT(*) AS c FROM requests WHERE ref LIKE ?').get(prefix + '%');
-  const count = Number(res?.c || 0);
-  return `${prefix}${1000 + count + 1}`;
+  const rows = await db.prepare('SELECT ref FROM requests WHERE ref LIKE ?').all(prefix + '%');
+  let maxNum = 1000;
+  for (const r of (rows || [])) {
+    const parts = (r.ref || '').split('-');
+    if (parts.length >= 3) {
+      const num = parseInt(parts[2], 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
+  }
+  let candidate = `${prefix}${maxNum + 1}`;
+  while (await db.prepare('SELECT 1 FROM requests WHERE UPPER(ref) = ?').get(candidate.toUpperCase())) {
+    maxNum++;
+    candidate = `${prefix}${maxNum + 1}`;
+  }
+  return candidate;
 }
 
 async function nextOrNumber() {
@@ -433,6 +447,11 @@ function setSessionCookie(req, res, token, maxAgeMs) {
 }
 
 async function createSession(req, res, role, userId) {
+  // Opportunistic cleanup in serverless environments (5% chance on session creation)
+  if (Math.random() < 0.05) {
+    db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now()).catch(() => {});
+    db.prepare('DELETE FROM password_reset_otps WHERE expires_at < ?').run(Date.now() - 24 * 60 * 60 * 1000).catch(() => {});
+  }
   const token = crypto.randomBytes(32).toString('hex');
   await db.prepare('INSERT INTO sessions (token, role, user_id, expires_at) VALUES (?, ?, ?, ?)')
     .run(token, role, userId, Date.now() + SESSION_MS);
@@ -1515,8 +1534,8 @@ app.get('/api/_debug/data', async (req, res) => {
   res.json({
     students: await db.prepare('SELECT id, name, course, phone_number, must_change_password FROM students').all(),
     staff: await db.prepare('SELECT username, name, department FROM staff').all(),
-    requests: await db.prepare('SELECT * FROM requests ORDER BY rowid DESC').all(),
-    official_receipts: await db.prepare('SELECT * FROM official_receipts ORDER BY rowid DESC').all(),
+    requests: await db.prepare('SELECT * FROM requests ORDER BY date_submitted DESC, ref DESC').all(),
+    official_receipts: await db.prepare('SELECT * FROM official_receipts ORDER BY date_issued DESC, or_number DESC').all(),
     request_items: await db.prepare('SELECT * FROM request_items').all(),
     request_timeline: await db.prepare('SELECT * FROM request_timeline ORDER BY id ASC').all()
   });
