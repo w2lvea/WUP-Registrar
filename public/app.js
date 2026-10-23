@@ -176,7 +176,11 @@ window.alert = function (message) {
 
 // ---------- API helper ----------
 async function apiRequest(method, path, body) {
-  const opts = { method, headers: {} };
+  const opts = { method, headers: {}, credentials: 'include' };
+  const token = localStorage.getItem('wup_session_token');
+  if (token) {
+    opts.headers['Authorization'] = 'Bearer ' + token;
+  }
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
@@ -184,12 +188,15 @@ async function apiRequest(method, path, body) {
   const res = await fetch('/api' + path, opts);
   let data = null;
   try { data = await res.json(); } catch (e) { /* no body */ }
-  if (res.status === 401 && currentUser && path !== '/login') {
-    // session expired or was lost on the server -> back to the login screen
-    currentUser = null; requestsData = [];
-    stopStaffAutoRefresh();
-    renderApp();
-    throw new Error('Your session expired. Please log in again.');
+  if (res.status === 401 && path !== '/login') {
+    if (currentUser) {
+      localStorage.removeItem('wup_session_token');
+      currentUser = null;
+      requestsData = [];
+      stopStaffAutoRefresh();
+      renderApp();
+      throw new Error('Your session expired. Please log in again.');
+    }
   }
   if (!res.ok) {
     const err = new Error((data && data.error) || `Request failed (${res.status})`);
@@ -260,17 +267,34 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Restore the logged-in session (if any) so refreshing the page doesn't kick people to the login screen.
   try {
     currentUser = await apiRequest('GET', '/me');
-    await Promise.all([
-      refreshRequestsData(),
-      loadReference()
-    ]);
-    if (currentUser.mustChangePassword) {
-      openSetPasswordScreen(true);
-      return;
+    if (currentUser && currentUser.token) {
+      localStorage.setItem('wup_session_token', currentUser.token);
     }
   } catch (e) {
     currentUser = null;
   }
+
+  if (currentUser) {
+    const savedView = localStorage.getItem('wup_current_view');
+    const savedFilter = localStorage.getItem('wup_current_filter');
+    if (savedView) currentView = savedView;
+    if (savedFilter) currentFilter = savedFilter;
+
+    try {
+      await Promise.all([
+        refreshRequestsData(),
+        loadReference()
+      ]);
+    } catch (e) {
+      console.warn('Dashboard data refresh on load:', e);
+    }
+
+    if (currentUser.mustChangePassword) {
+      openSetPasswordScreen(true);
+      return;
+    }
+  }
+
   renderApp();
   startStaffAutoRefresh();
   initOtpInputs();
@@ -324,6 +348,9 @@ async function handleUnifiedLogin(e) {
 
   try {
     currentUser = await apiRequest('POST', '/login', { username: u, password: p });
+    if (currentUser && currentUser.token) {
+      localStorage.setItem('wup_session_token', currentUser.token);
+    }
   } catch (err) {
     errBox.classList.remove('hidden');
     if (submitBtn) {
@@ -336,6 +363,8 @@ async function handleUnifiedLogin(e) {
   try {
     currentView = 'requests';
     currentFilter = 'all';
+    localStorage.setItem('wup_current_view', 'requests');
+    localStorage.setItem('wup_current_filter', 'all');
     await Promise.all([
       refreshRequestsData(),
       loadReference()
@@ -372,6 +401,9 @@ function togglePasswordVisibility() {
 
 function handleLogout() {
   stopStaffAutoRefresh();
+  localStorage.removeItem('wup_session_token');
+  localStorage.removeItem('wup_current_view');
+  localStorage.removeItem('wup_current_filter');
   apiRequest('POST', '/logout').catch(() => { });
   currentUser = null;
   requestsData = [];
@@ -1337,6 +1369,8 @@ function closeMobileSidebar() {
 function navTo(view, filter) {
   currentView = view;
   if (filter) currentFilter = filter;
+  localStorage.setItem('wup_current_view', currentView);
+  localStorage.setItem('wup_current_filter', currentFilter);
   editingFeeId = null;
   renderSidebarNav();
   renderView();

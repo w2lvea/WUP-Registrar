@@ -424,7 +424,7 @@ function parseCookies(req) {
 
 function setSessionCookie(req, res, token, maxAgeMs) {
   const flags = [`${SESSION_COOKIE}=${token}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${Math.floor(maxAgeMs / 1000)}`];
-  if (req.secure) flags.push('Secure');
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.VERCEL) flags.push('Secure');
   res.setHeader('Set-Cookie', flags.join('; '));
 }
 
@@ -433,10 +433,18 @@ async function createSession(req, res, role, userId) {
   await db.prepare('INSERT INTO sessions (token, role, user_id, expires_at) VALUES (?, ?, ?, ?)')
     .run(token, role, userId, Date.now() + SESSION_MS);
   setSessionCookie(req, res, token, SESSION_MS);
+  return token;
 }
 
 async function getSession(req) {
-  const token = parseCookies(req)[SESSION_COOKIE];
+  let token = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.toLowerCase().startsWith('bearer ')) {
+    token = auth.slice(7).trim();
+  }
+  if (!token) {
+    token = parseCookies(req)[SESSION_COOKIE];
+  }
   if (!token) return null;
   const s = await db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
   if (!s) return null;
@@ -522,8 +530,9 @@ app.post('/api/login', async (req, res) => {
 
   const staff = await db.prepare('SELECT * FROM staff WHERE username = ?').get(username.toLowerCase());
   if (staff && verifyPassword(password, staff.password_hash)) {
-    await createSession(req, res, 'staff', staff.username);
+    const token = await createSession(req, res, 'staff', staff.username);
     return res.json({
+      token,
       role: 'staff',
       id: staff.username,
       name: staff.name,
@@ -536,8 +545,9 @@ app.post('/api/login', async (req, res) => {
 
   const student = await db.prepare("SELECT * FROM students WHERE id = ? OR (username != '' AND LOWER(username) = LOWER(?))").get(username.toUpperCase(), username);
   if (student && verifyPassword(password, student.password_hash)) {
-    await createSession(req, res, 'student', student.id);
+    const token = await createSession(req, res, 'student', student.id);
     return res.json({
+      token,
       role: 'student',
       id: student.id,
       username: student.username || '',
@@ -557,11 +567,18 @@ app.get('/api/me', async (req, res) => {
   const s = await getSession(req);
   const user = s && (await buildUser(s.role, s.user_id));
   if (!user) return res.status(401).json({ error: 'Not logged in.' });
-  res.json(user);
+  res.json({ ...user, token: s.token });
 });
 
 app.post('/api/logout', async (req, res) => {
-  const token = parseCookies(req)[SESSION_COOKIE];
+  let token = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.toLowerCase().startsWith('bearer ')) {
+    token = auth.slice(7).trim();
+  }
+  if (!token) {
+    token = parseCookies(req)[SESSION_COOKIE];
+  }
   if (token) await db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
   setSessionCookie(req, res, '', 0);
   res.json({ success: true });
