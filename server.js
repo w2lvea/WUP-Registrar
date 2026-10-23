@@ -203,6 +203,36 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, 'public'), { etag: false, maxAge: 0 }));
 
+// Health / Database Status check endpoint
+app.get('/api/db-status', async (req, res) => {
+  try {
+    const isPostgres = !!db.isPostgres;
+    const hasDbUrl = !!process.env.DATABASE_URL;
+    let studentCount = null;
+    let staffCount = null;
+    let error = null;
+    try {
+      const stu = await db.prepare('SELECT count(*) as c FROM students').get();
+      studentCount = Number(stu?.c || 0);
+      const stf = await db.prepare('SELECT count(*) as c FROM staff').get();
+      staffCount = Number(stf?.c || 0);
+    } catch (e) {
+      error = e.message;
+    }
+    res.json({
+      connected: studentCount !== null && error === null,
+      isPostgres,
+      hasDbUrl,
+      dbUrlConfigured: hasDbUrl ? `${process.env.DATABASE_URL.slice(0, 20)}...` : 'NOT_CONFIGURED',
+      studentCount,
+      staffCount,
+      error
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------- helpers ----------
 
 function nowTime() {
