@@ -1540,6 +1540,9 @@ app.get('*', (req, res, next) => {
 app.use((err, req, res, next) => {
   console.error('[API Error]', err);
   if (res.headersSent) return next(err);
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({ error: 'Uploaded file is too large. Please select a photo or document under 3.5 MB.' });
+  }
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 

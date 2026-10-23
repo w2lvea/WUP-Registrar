@@ -188,7 +188,15 @@ async function apiRequest(method, path, body) {
     }
   }
   if (!res.ok) {
-    const err = new Error((data && data.error) || `Request failed (${res.status})`);
+    let msg = (data && data.error);
+    if (!msg) {
+      if (res.status === 413) {
+        msg = 'The uploaded file is too large for Vercel serverless functions (HTTP 413). Please choose a photo or file under 3.5 MB.';
+      } else {
+        msg = `Request failed (${res.status})`;
+      }
+    }
+    const err = new Error(msg);
     err.status = res.status;
     throw err;
   }
@@ -1532,21 +1540,111 @@ function adjustDocQuantity(id, delta) {
   document.getElementById(`pick-${id}`).classList.toggle('on', next > 0);
 }
 
-function readUpload(input, labelId, previewWrapId, previewImgId, iconId, setter) {
+/**
+ * Client-side image compression using HTML5 Canvas.
+ * Prevents Vercel's HTTP 413 (Payload Too Large) by downsizing 5-15MB camera
+ * photos into a crisp, high-clarity ~300-600KB document image.
+ */
+function compressImageFile(file, maxDimension = 1600, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read file.'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Failed to parse image data.'));
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(e.target.result);
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        let dataUrl = canvas.toDataURL('image/jpeg', quality);
+        if (dataUrl.length > 3 * 1024 * 1024) {
+          dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+        }
+        resolve(dataUrl);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function readUpload(input, labelId, previewWrapId, previewImgId, iconId, setter) {
   if (!(input.files && input.files[0])) return;
   const file = input.files[0];
-  document.getElementById(labelId).innerText = `Attached: ${file.name}`;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    setter(e.target.result);
-    if (file.type.startsWith('image/')) {
-      document.getElementById(previewImgId).src = e.target.result;
-      show(previewWrapId); hide(iconId);
-    } else {
-      hide(previewWrapId); show(iconId);
+
+  const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic)$/i.test(file.name);
+
+  if (!isImage) {
+    if (file.size > 3.5 * 1024 * 1024) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      await fancyAlert(
+        `The selected document is too large (${sizeMb} MB). Vercel serverless functions have a 4.5 MB payload limit. Please upload a PDF under 3.5 MB or take a photo of the document.`,
+        'File Too Large',
+        'warning'
+      );
+      input.value = '';
+      return;
     }
-  };
-  reader.readAsDataURL(file);
+
+    const label = document.getElementById(labelId);
+    if (label) label.innerText = `Attached: ${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setter(e.target.result);
+      hide(previewWrapId);
+      show(iconId);
+    };
+    reader.readAsDataURL(file);
+    return;
+  }
+
+  const label = document.getElementById(labelId);
+  if (label) label.innerText = `Optimizing: ${file.name}...`;
+
+  try {
+    const compressedDataUrl = await compressImageFile(file, 1600, 0.82);
+    setter(compressedDataUrl);
+
+    const approxKb = Math.round((compressedDataUrl.length * 3) / 4 / 1024);
+    if (label) label.innerText = `Attached: ${file.name} (~${approxKb} KB optimized)`;
+
+    const previewImg = document.getElementById(previewImgId);
+    if (previewImg) previewImg.src = compressedDataUrl;
+    show(previewWrapId);
+    hide(iconId);
+  } catch (err) {
+    console.warn('Image compression fallback:', err);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setter(e.target.result);
+      const previewImg = document.getElementById(previewImgId);
+      if (previewImg) previewImg.src = e.target.result;
+      show(previewWrapId);
+      hide(iconId);
+      if (label) label.innerText = `Attached: ${file.name}`;
+    };
+    reader.readAsDataURL(file);
+  }
 }
 function handleAssessmentFileSelected(input) {
   readUpload(input, 'fileAssessmentLabel', 'assessmentPhotoPreviewContainer', 'assessmentPhotoPreview', 'assessmentUploadIcon', v => { uploadedAssessmentPhotoData = v; });
@@ -1652,6 +1750,12 @@ async function submitNewRequest() {
     return;
   }
 
+  // Pre-flight check: ensure payload stays safely below Vercel's 4.5 MB limit
+  if (uploadedAssessmentPhotoData.length > 4.2 * 1024 * 1024) {
+    await fancyAlert('The attached Assessment Form is too large for serverless submission (> 4 MB). Please upload an image or PDF under 3.5 MB.', 'File Too Large', 'warning');
+    return;
+  }
+
   const btn = document.getElementById('submitRequestBtn');
   btn.disabled = true;
   try {
@@ -1671,6 +1775,8 @@ async function submitNewRequest() {
       showOrError(err.message);
       await fancyAlert(err.message, 'Receipt Verification Failed', 'danger');
       document.getElementById('reqOrNumber').focus();
+    } else if (err.status === 413) {
+      await fancyAlert(err.message || 'The attached file is too large for the Vercel serverless platform (413). Please choose a smaller photo or document.', 'Upload Too Large (413)', 'danger');
     } else {
       await fancyAlert('Could not submit the request: ' + err.message, 'Submission Failed', 'danger');
     }
