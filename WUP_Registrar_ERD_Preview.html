@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WUP Registrar System - Entity-Relationship Diagram (ERD)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #f1f5f9;
+      color: #1e293b;
+      line-height: 1.5;
+      padding: 24px;
+    }
+    .container {
+      max-width: 1750px;
+      margin: 0 auto;
+    }
+    .header-card {
+      background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
+      color: #ffffff;
+      padding: 24px 32px;
+      border-radius: 14px;
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2);
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .header-title h1 {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge-tag {
+      background: #3b82f6;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+    .header-title p {
+      font-size: 14px;
+      color: #94a3b8;
+      margin-top: 6px;
+    }
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 8px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary {
+      background: #334155;
+      color: white;
+    }
+    .btn-secondary:hover { background: #475569; }
+
+    /* Lifecycle ribbon */
+    .lifecycle-ribbon {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px 20px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .lifecycle-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12.5px;
+      padding: 8px 14px;
+      border-radius: 8px;
+    }
+    .step-1 { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .step-2 { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+    .step-3 { background: #f5f3ff; color: #5b21b6; border: 1px solid #ddd6fe; }
+    .step-4 { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .step-5 { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .arrow-sep { color: #94a3b8; font-weight: bold; font-size: 16px; }
+
+    /* Grid Layout */
+    .diagram-grid {
+      display: grid;
+      grid-template-columns: 340px 420px 360px 340px;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 1550px) {
+      .diagram-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 850px) {
+      .diagram-grid { grid-template-columns: 1fr; }
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Entity Cards */
+    .card {
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.06), 0 2px 6px -2px rgba(0, 0, 0, 0.04);
+      border: 2px solid transparent;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    .card-students { border-color: #2563eb; }
+    .card-requests { border-color: #059669; }
+    .card-items { border-color: #0d9488; }
+    .card-timeline { border-color: #0284c7; }
+    .card-receipts { border-color: #d97706; }
+    .card-staff { border-color: #7c3aed; }
+    .card-documents { border-color: #db2777; }
+    .card-fees { border-color: #ea580c; }
+    .card-security { border-color: #64748b; }
+    .card-guide { border-color: #6366f1; }
+
+    .card-header {
+      padding: 12px 16px;
+      color: #ffffff;
+    }
+    .header-students { background: #1d4ed8; }
+    .header-requests { background: #047857; }
+    .header-items { background: #0f766e; }
+    .header-timeline { background: #0369a1; }
+    .header-receipts { background: #b45309; }
+    .header-staff { background: #6d28d9; }
+    .header-documents { background: #be185d; }
+    .header-fees { background: #c2410c; }
+    .header-security { background: #475569; }
+    .header-guide { background: #4f46e5; }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-subtitle {
+      font-size: 11px;
+      opacity: 0.9;
+      margin-top: 2px;
+      font-weight: 400;
+    }
+
+    table.fields-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+    }
+    table.fields-table tr {
+      border-bottom: 1px solid #f1f5f9;
+    }
+    table.fields-table tr:last-child {
+      border-bottom: none;
+    }
+    table.fields-table tr:nth-child(even) {
+      background-color: #f8fafc;
+    }
+    table.fields-table td {
+      padding: 7px 12px;
+      vertical-align: middle;
+    }
+    .field-name {
+      font-weight: 600;
+      color: #1e293b;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .field-desc {
+      color: #475569;
+      font-size: 11px;
+    }
+    .field-type {
+      display: inline-block;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 10px;
+      color: #0f766e;
+      background: #f0fdfa;
+      padding: 1px 4px;
+      border-radius: 3px;
+      margin-right: 4px;
+    }
+
+    /* Badges */
+    .badge-pk {
+      background: #dbeafe;
+      color: #1e40af;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1.5px 5px;
+      border-radius: 4px;
+      border: 1px solid #bfdbfe;
+    }
+    .badge-fk {
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1.5px 5px;
+      border-radius: 4px;
+      border: 1px solid #fde68a;
+    }
+    .badge-uq {
+      background: #f3e8ff;
+      color: #6b21a8;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1.5px 5px;
+      border-radius: 4px;
+      border: 1px solid #e9d5ff;
+    }
+
+    /* Relationship Connectors callouts */
+    .relation-pill {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-left: 4px solid #2563eb;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      margin-bottom: 8px;
+    }
+    .relation-pill b { color: #0f172a; }
+
+    /* Instructions Modal / Box */
+    .guide-box {
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 30px;
+      font-size: 13px;
+    }
+    .guide-box h3 {
+      font-size: 16px;
+      color: #3730a3;
+      margin-bottom: 10px;
+    }
+    .guide-box ol {
+      margin-left: 20px;
+      margin-bottom: 12px;
+    }
+    .guide-box li {
+      margin-bottom: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Top Header -->
+  <div class="header-card">
+    <div class="header-title">
+      <h1>
+        <span class="badge-tag">WUP-REGISTRAR</span>
+        Wesleyan University - Philippines
+      </h1>
+      <p>Entity-Relationship Diagram (ERD) — Plain English Visual Guide for Non-Technical Users &amp; Evaluators</p>
+    </div>
+    <div class="header-actions">
+      <a href="WUP_Registrar_ERD.drawio" download class="btn btn-primary">
+        📥 Download .drawio File
+      </a>
+      <a href="https://app.diagrams.net/" target="_blank" class="btn btn-secondary">
+        🌐 Open Diagrams.net (Draw.io)
+      </a>
+    </div>
+  </div>
+
+  <!-- Real-life User Journey Ribbon -->
+  <div class="lifecycle-ribbon">
+    <div style="font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 6px;">
+      <span style="font-size: 18px;">🔄</span><b>How the System Works in Real Life:</b>
+    </div>
+    <div class="lifecycle-step step-1">
+      <b>Step 1:</b> 💳 Pay fee at Treasury &amp; get Official Receipt (OR)
+    </div>
+    <div class="arrow-sep">➔</div>
+    <div class="lifecycle-step step-2">
+      <b>Step 2:</b> 📝 Student submits Request with OR # &amp; Clearances
+    </div>
+    <div class="arrow-sep">➔</div>
+    <div class="lifecycle-step step-3">
+      <b>Step 3:</b> 🔍 Registrar Staff verifies Receipt &amp; approves
+    </div>
+    <div class="arrow-sep">➔</div>
+    <div class="lifecycle-step step-4">
+      <b>Step 4:</b> 🖨️ Document is processed &amp; Claim Date scheduled
+    </div>
+    <div class="arrow-sep">➔</div>
+    <div class="lifecycle-step step-5">
+      <b>Step 5:</b> 🎓 Student tracks progress &amp; claims printed document
+    </div>
+  </div>
+
+  <!-- Entities Grid -->
+  <div class="diagram-grid">
+    
+    <!-- COLUMN 1: Student & Security -->
+    <div class="column">
+      <!-- Students -->
+      <div class="card card-students">
+        <div class="card-header header-students">
+          <div class="card-title"><span>🎓</span> STUDENTS</div>
+          <div class="card-subtitle">Registered university students requesting documents</div>
+        </div>
+        <table class="fields-table">
+          <tr>
+            <td><div class="field-name"><span class="badge-pk">PK</span>id</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Student ID (e.g. WUP-24-1122-112)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">name</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Full student name</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">course</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Degree program (e.g. BS Information Technology)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">email</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>University or personal email for recovery</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">phone_number</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Mobile number used for SMS OTP verification</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name"><span class="badge-uq">UQ</span>username</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Unique handle chosen for custom login</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">password_hash</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Encrypted password (scrypt cryptographic hash)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">must_change_pw</div></td>
+            <td><div class="field-desc"><span class="field-type">INT</span>1 = Must change temporary password on 1st login</div></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Sessions -->
+      <div class="card card-security">
+        <div class="card-header header-security">
+          <div class="card-title"><span>🔑</span> SESSIONS</div>
+          <div class="card-subtitle">Active user login sessions (browser cookies)</div>
+        </div>
+        <table class="fields-table">
+          <tr>
+            <td><div class="field-name"><span class="badge-pk">PK</span>token</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Random cryptographic session ID in cookie</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">role</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>"student" or "staff"</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">user_id</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Owner ID (Student ID or Staff Username)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">expires_at</div></td>
+            <td><div class="field-desc"><span class="field-type">BIGINT</span>Unix timestamp when session expires (12 hrs)</div></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Password Reset OTPs -->
+      <div class="card card-security">
+        <div class="card-header header-security">
+          <div class="card-title"><span>🛡️</span> PASSWORD_RESET_OTPS</div>
+          <div class="card-subtitle">One-time passcodes for secure account recovery</div>
+        </div>
+        <table class="fields-table">
+          <tr>
+            <td><div class="field-name"><span class="badge-pk">PK</span>id</div></td>
+            <td><div class="field-desc"><span class="field-type">BIGSERIAL</span>Unique verification code record ID</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">user_type</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Account type: "student" or "staff"</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">user_id</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Student ID or Staff Username</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">delivery_method</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Sent via "email" or "sms"</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">otp_code</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>6-digit security code (e.g. 482910)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">expires_at</div></td>
+            <td><div class="field-desc"><span class="field-type">BIGINT</span>Valid for 10 minutes from creation</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">used</div></td>
+            <td><div class="field-desc"><span class="field-type">INT</span>1 = Already used (prevents re-use)</div></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- COLUMN 2: Core Requests Hub & Receipts -->
+    <div class="column">
+      <!-- Requests -->
+      <div class="card card-requests">
+        <div class="card-header header-requests">
+          <div class="card-title"><span>📋</span> REQUESTS (Central Hub)</div>
+          <div class="card-subtitle">Main transaction: document request bundle &amp; tracking</div>
+        </div>
+        <table class="fields-table">
+          <tr>
+            <td><div class="field-name"><span class="badge-pk">PK</span>ref</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Tracking Reference Code (e.g. REQ-2026-001)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name"><span class="badge-fk">FK</span>student_id</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Owner Student (links to <b>students.id</b>)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name"><span class="badge-fk">FK</span>or_number</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Receipt # (links to <b>official_receipts</b>)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">status</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Pending Verification, Pending Review, Processing, Ready, Claimed, Declined</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">date_submitted</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Submission date and timestamp</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">claim_date</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Scheduled pickup date chosen by registrar</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">rejection_reason</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Explanation note if request is declined</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">assessment_photo</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Attached photo proof of assessment slip</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">clearance_photo</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Attached photo proof of signed clearance</div></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Official Receipts -->
+      <div class="card card-receipts">
+        <div class="card-header header-receipts">
+          <div class="card-title"><span>🧾</span> OFFICIAL_RECEIPTS (Treasury)</div>
+          <div class="card-subtitle">Official payment records from university cashier</div>
+        </div>
+        <table class="fields-table">
+          <tr>
+            <td><div class="field-name"><span class="badge-pk">PK</span>or_number</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Official Cashier Receipt # (e.g. OR-2026-88192)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">student_id</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Student ID receipt was issued to</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">student_name</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Student name appearing on official receipt</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">amount</div></td>
+            <td><div class="field-desc"><span class="field-type">NUMERIC</span>Amount paid in Philippine Pesos (PHP)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">description</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Payment description (e.g. Treasury Clearance Receipt)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">date_issued</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Date printed by cashier</div></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- COLUMN 3: Request Items, Timeline & Staff -->
+    <div class="column">
+      <!-- Request Items -->
+      <div class="card card-items">
+        <div class="card-header header-items">
+          <div class="card-title"><span>📑</span> REQUEST_ITEMS</div>
+          <div class="card-subtitle">Documents included in a single request bundle</div>
+        </div>
+        <table class="fields-table">
+          <tr>
+            <td><div class="field-name"><span class="badge-pk">PK</span>id</div></td>
+            <td><div class="field-desc"><span class="field-type">BIGSERIAL</span>Unique item row identifier</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name"><span class="badge-fk">FK</span>ref</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Parent request reference (links to <b>requests.ref</b>)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">name</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Document name (e.g. Transcript of Records)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">copies</div></td>
+            <td><div class="field-desc"><span class="field-type">INTEGER</span>Number of copies requested (e.g. 1, 2)</div></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Request Timeline -->
+      <div class="card card-timeline">
+        <div class="card-header header-timeline">
+          <div class="card-title"><span>🕒</span> REQUEST_TIMELINE</div>
+          <div class="card-subtitle">Live status history for student tracking &amp; audit</div>
+        </div>
+        <table class="fields-table">
+          <tr>
+            <td><div class="field-name"><span class="badge-pk">PK</span>id</div></td>
+            <td><div class="field-desc"><span class="field-type">BIGSERIAL</span>Timeline milestone row identifier</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name"><span class="badge-fk">FK</span>ref</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Parent request reference (links to <b>requests.ref</b>)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">title</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Milestone (e.g. "Pending Verification", "Ready")</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">time</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Timestamp when event happened</div></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Staff -->
+      <div class="card card-staff">
+        <div class="card-header header-staff">
+          <div class="card-title"><span>💼</span> STAFF (Registrar)</div>
+          <div class="card-subtitle">Registrar officers reviewing &amp; fulfilling requests</div>
+        </div>
+        <table class="fields-table">
+          <tr>
+            <td><div class="field-name"><span class="badge-pk">PK</span>username</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Staff login handle (e.g. jelai)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">name</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Full Name (e.g. Jeremiah Miguel Eugenio)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">department</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Assigned office (e.g. Office of Records)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">email</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>University staff email</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">phone_number</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Contact phone number for OTP recovery</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">password_hash</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Encrypted scrypt password</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">must_change_pw</div></td>
+            <td><div class="field-desc"><span class="field-type">INT</span>1 = Mandatory password change on first sign-in</div></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- COLUMN 4: Catalogs & Guide -->
+    <div class="column">
+      <!-- Documents Catalog -->
+      <div class="card card-documents">
+        <div class="card-header header-documents">
+          <div class="card-title"><span>📜</span> DOCUMENTS (Catalog)</div>
+          <div class="card-subtitle">Master list of requestable university documents</div>
+        </div>
+        <table class="fields-table">
+          <tr>
+            <td><div class="field-name"><span class="badge-pk">PK</span>id</div></td>
+            <td><div class="field-desc"><span class="field-type">BIGSERIAL</span>Document type ID</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name"><span class="badge-uq">UQ</span>name</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Document title (e.g. Certificate of Grades)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">description</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Lead time (e.g. Processing time: 2-3 days)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">active</div></td>
+            <td><div class="field-desc"><span class="field-type">INTEGER</span>1 = Visible to students, 0 = Disabled</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">sort_order</div></td>
+            <td><div class="field-desc"><span class="field-type">INTEGER</span>Position in student request form</div></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Fees Price List -->
+      <div class="card card-fees">
+        <div class="card-header header-fees">
+          <div class="card-title"><span>💰</span> FEES (Clearance Fees)</div>
+          <div class="card-subtitle">Official university price schedule for clearances</div>
+        </div>
+        <table class="fields-table">
+          <tr>
+            <td><div class="field-name"><span class="badge-pk">PK</span>id</div></td>
+            <td><div class="field-desc"><span class="field-type">BIGSERIAL</span>Fee item ID</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name"><span class="badge-uq">UQ</span>name</div></td>
+            <td><div class="field-desc"><span class="field-type">TEXT</span>Item/Service name (e.g. Diploma, TOR)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">price</div></td>
+            <td><div class="field-desc"><span class="field-type">NUMERIC</span>Cost in Philippine Pesos (PHP)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name">sort_order</div></td>
+            <td><div class="field-desc"><span class="field-type">INTEGER</span>Order shown in price table</div></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Guide / Legend -->
+      <div class="card card-guide">
+        <div class="card-header header-guide">
+          <div class="card-title"><span>💡</span> DIAGRAM GUIDE</div>
+          <div class="card-subtitle">How to read relationships &amp; symbols</div>
+        </div>
+        <table class="fields-table">
+          <tr>
+            <td><div class="field-name"><span class="badge-pk">PK</span> Primary Key</div></td>
+            <td><div class="field-desc">Unique identifier for each record in the table</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name"><span class="badge-fk">FK</span> Foreign Key</div></td>
+            <td><div class="field-desc">Connects this record to another table</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name"><b>1 : Many (1:N)</b></div></td>
+            <td><div class="field-desc">1 Student can submit Many Requests; 1 Request has Many Items</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name"><b>1 : 1 (Single-use)</b></div></td>
+            <td><div class="field-desc">1 Official Receipt can only be used by 1 Request</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name"><b>Solid Line ➔</b></div></td>
+            <td><div class="field-desc">Direct database relationship (Parent to Child)</div></td>
+          </tr>
+          <tr>
+            <td><div class="field-name"><b>Dashed Line ⇢</b></div></td>
+            <td><div class="field-desc">Catalog reference or lookup validation</div></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- How to open in Draw.io Box -->
+  <div class="guide-box">
+    <h3>🚀 How to Open and Edit in Draw.io (diagrams.net):</h3>
+    <ol>
+      <li>Go to <a href="https://app.diagrams.net" target="_blank" style="color: #2563eb; font-weight: bold;">app.diagrams.net</a> (or open Draw.io desktop application).</li>
+      <li>Click <b>"Open Existing Diagram"</b> (or choose <b>File &gt; Open From &gt; Device</b>).</li>
+      <li>Select the file <b><code>WUP_Registrar_ERD.drawio</code></b> located in this project directory: <br>
+      <code>c:\Users\joshua\Downloads\wup-registrar-system-main-uncom\wup-registrar-system-main-uncom\WUP_Registrar_ERD.drawio</code></li>
+      <li>You can now view, zoom, customize colors, drag tables, export to PNG/PDF, or present!</li>
+    </ol>
+  </div>
+</div>
+
+</body>
+</html>

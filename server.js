@@ -236,7 +236,12 @@ app.get('/api/db-status', async (req, res) => {
 // ---------- helpers ----------
 
 function nowTime() {
-  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  }).format(new Date());
 }
 
 async function getFullRequest(ref) {
@@ -353,7 +358,7 @@ async function addTimelineAndStatus(ref, status, title) {
 }
 
 async function nextRef() {
-  const year = new Date().getFullYear();
+  const year = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', year: 'numeric' }).format(new Date());
   const prefix = `DOC-${year}-`;
   const res = await db.prepare('SELECT COUNT(*) AS c FROM requests WHERE ref LIKE ?').get(prefix + '%');
   const count = Number(res?.c || 0);
@@ -361,7 +366,7 @@ async function nextRef() {
 }
 
 async function nextOrNumber() {
-  const year = new Date().getFullYear();
+  const year = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', year: 'numeric' }).format(new Date());
   const prefix = `OR-${year}-`;
   const rows = await db.prepare("SELECT or_number FROM official_receipts WHERE UPPER(or_number) LIKE ?").all(`${prefix}%`);
   let maxNum = 50000;
@@ -399,14 +404,10 @@ async function isOrUsed(orNumber) {
 
 // Today's date in the Philippines (YYYY-MM-DD), used to stop claim dates in the past.
 function todayPH() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
 }
 function isValidDate(str) {
   return /^\d{4}-\d{2}-\d{2}$/.test(str) && !Number.isNaN(Date.parse(str));
-}
-function prettyDate(str) {
-  const [y, m, d] = str.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 // ---------- sessions (keeps people logged in across page refreshes) ----------
@@ -701,15 +702,23 @@ app.post('/api/change-contact', requireLogin, async (req, res) => {
   }
 
   const cleanEmail = (email || '').trim();
-  const cleanPhone = (phoneNumber || '').trim();
 
-  if (role === 'staff') {
-    await db.prepare('UPDATE staff SET email = ?, phone_number = ? WHERE username = ?').run(cleanEmail, cleanPhone, id);
+  if (phoneNumber !== undefined) {
+    const cleanPhone = (phoneNumber || '').trim();
+    if (role === 'staff') {
+      await db.prepare('UPDATE staff SET email = ?, phone_number = ? WHERE username = ?').run(cleanEmail, cleanPhone, id);
+    } else {
+      await db.prepare('UPDATE students SET email = ?, phone_number = ? WHERE id = ?').run(cleanEmail, cleanPhone, id);
+    }
+    res.json({ success: true, email: cleanEmail, phoneNumber: cleanPhone });
   } else {
-    await db.prepare('UPDATE students SET email = ?, phone_number = ? WHERE id = ?').run(cleanEmail, cleanPhone, id);
+    if (role === 'staff') {
+      await db.prepare('UPDATE staff SET email = ? WHERE username = ?').run(cleanEmail, id);
+    } else {
+      await db.prepare('UPDATE students SET email = ? WHERE id = ?').run(cleanEmail, id);
+    }
+    res.json({ success: true, email: cleanEmail });
   }
-
-  res.json({ success: true, email: cleanEmail, phoneNumber: cleanPhone });
 });
 
 // Registrar staff managing student contact info
@@ -1135,7 +1144,16 @@ app.post('/api/requests', requireLogin, async (req, res) => {
   if (!student) return res.status(404).json({ error: 'Student not found.' });
 
   const ref = await nextRef();
-  const dateSubmitted = new Date().toLocaleString();
+  const dateSubmitted = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  }).format(new Date());
 
   await db.exec('BEGIN');
   try {
@@ -1182,25 +1200,10 @@ app.post('/api/requests/:ref/approve-payment', requireStaff, async (req, res) =>
 });
 
 app.post('/api/requests/:ref/mark-ready', requireStaff, async (req, res) => {
-  const claimDate = String(req.body.claimDate || '').trim();
-  if (!isValidDate(claimDate)) return res.status(400).json({ error: 'Pick a claim date.' });
-  if (claimDate < todayPH()) return res.status(400).json({ error: 'The claim date cannot be in the past.' });
   if (!(await loadForAction(req, res, 'processing'))) return;
   const ref = req.params.ref;
-  await db.prepare('UPDATE requests SET claim_date = ? WHERE ref = ?').run(claimDate, ref);
-  await addTimelineAndStatus(ref, 'ready', `Ready to Claim at the Registrar Claiming Window on ${prettyDate(claimDate)}`);
-  res.json(await getFullRequest(ref));
-});
-
-app.post('/api/requests/:ref/claim-date', requireStaff, async (req, res) => {
-  const claimDate = String(req.body.claimDate || '').trim();
-  if (!isValidDate(claimDate)) return res.status(400).json({ error: 'Pick a claim date.' });
-  if (claimDate < todayPH()) return res.status(400).json({ error: 'The claim date cannot be in the past.' });
-  if (!(await loadForAction(req, res, 'ready'))) return;
-  const ref = req.params.ref;
-  await db.prepare('UPDATE requests SET claim_date = ? WHERE ref = ?').run(claimDate, ref);
-  await db.prepare('INSERT INTO request_timeline (ref, title, time) VALUES (?, ?, ?)')
-    .run(ref, `Claim date changed to ${prettyDate(claimDate)}`, nowTime());
+  await db.prepare('UPDATE requests SET claim_date = ? WHERE ref = ?').run('', ref);
+  await addTimelineAndStatus(ref, 'ready', 'Ready to Claim at the Registrar Claiming Window');
   res.json(await getFullRequest(ref));
 });
 

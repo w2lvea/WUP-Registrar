@@ -139,7 +139,7 @@
 
         <div id="contactSection" class="hidden" style="margin-top:28px;padding-top:22px;border-top:1px solid var(--line)">
           <h2 style="font-size:20px">Contact information</h2>
-          <p class="muted" style="margin-top:6px">Manage your registered phone number and email for OTP password recovery.</p>
+          <p class="muted" style="margin-top:6px">Manage your registered email for OTP password recovery.</p>
           <form id="contactForm" onsubmit="handleChangeContact(event)" style="margin-top:14px">
             <label class="field">
               <span class="label">Email address</span>
@@ -147,14 +147,6 @@
                 <i class="fa-solid fa-envelope lead-icon"></i>
                 <input type="email" id="contactEmail" class="input has-icon" placeholder="your_email@gmail.com" />
               </span>
-            </label>
-            <label class="field" style="margin-top:12px">
-              <span class="label">Mobile phone number</span>
-              <span class="input-wrap">
-                <i class="fa-solid fa-mobile-screen lead-icon"></i>
-                <input type="tel" id="contactPhone" class="input has-icon" placeholder="09181234567" />
-              </span>
-              <span class="help">Philippine mobile number format: 09XXXXXXXXX</span>
             </label>
             <label class="field" style="margin-top:12px">
               <span class="label">Current password</span>
@@ -229,7 +221,7 @@
             <button onclick="openMobileSidebar()" class="icon-btn menu-btn" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
             <div>
               <h2>Document requests</h2>
-              <p>Check each student's OR number and Assessment Form, process the request, then set the date to claim it.</p>
+              <p>Check each student's OR number and Assessment Form, process the request, then mark it ready to claim.</p>
             </div>
           </div>
         </div>
@@ -801,10 +793,6 @@
           <div id="revDocsList" style="display:grid;gap:8px"></div>
         </div>
 
-        <div id="revClaimBox" class="hidden">
-          <div class="field"><span class="label">Claim date</span></div>
-          <div id="revClaimContent"></div>
-        </div>
 
         <div id="revDeclineReasonBox" class="decline-note hidden" style="margin-top:0">
           <b>Reason for declining</b>
@@ -839,24 +827,6 @@
     </div>
   </div>
 
-  <!-- Ready to claim: pick (or change) the claim date -->
-  <div id="modalReady" class="modal hidden" style="z-index:70">
-    <div class="modal-card">
-      <div class="modal-head"><h3 id="readyTitle">Set the claim date</h3><button class="modal-x" onclick="closeReadyModal()" aria-label="Close">&times;</button></div>
-      <div class="modal-body">
-        <label class="field">
-          <span class="label">Date the student can claim the documents</span>
-          <input type="date" id="readyDate" class="input" />
-          <p class="help">The student sees this date on their dashboard. It can't be a past date.</p>
-        </label>
-        <p id="readyError" class="notice-error hidden"></p>
-      </div>
-      <div class="modal-foot">
-        <button onclick="closeReadyModal()" class="btn btn-ghost">Cancel</button>
-        <button id="readyConfirmBtn" onclick="confirmReadyModal()" class="btn btn-primary">Mark as ready to claim</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Decline reason -->
   <div id="modalDecline" class="modal hidden" style="z-index:70">

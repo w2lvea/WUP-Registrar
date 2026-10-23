@@ -26,8 +26,6 @@ let forcedPasswordChange = false;
 let editingFeeId = null;
 let editingDocId = null;
 let pendingGradesRef = null;
-let readyModalRef = null;
-let readyModalIsChange = false;
 let orUsed = false;
 let orValid = false;
 let orCheckTimer = null;
@@ -44,17 +42,7 @@ function money(n) {
   return Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function todayLocal() {
-  return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-}
-function dateParts(iso) {
-  const [y, m, d] = iso.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  return {
-    mon: dt.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
-    day: d,
-    dow: dt.toLocaleDateString('en-US', { weekday: 'long' }),
-    full: dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-  };
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date()); // YYYY-MM-DD (Philippine Standard Time)
 }
 function show(id) { const el = document.getElementById(id); if (el) el.classList.remove('hidden'); }
 function hide(id) { const el = document.getElementById(id); if (el) el.classList.add('hidden'); }
@@ -1118,13 +1106,11 @@ async function handleChangeContact(e) {
   okBox.classList.add('hidden');
 
   const email = document.getElementById('contactEmail').value.trim();
-  const phoneNumber = document.getElementById('contactPhone').value.trim();
   const currentPassword = document.getElementById('contactPassword').value;
 
   try {
-    const data = await apiRequest('POST', '/change-contact', { email, phoneNumber, currentPassword });
+    const data = await apiRequest('POST', '/change-contact', { email, currentPassword });
     currentUser.email = data.email;
-    currentUser.phoneNumber = data.phoneNumber;
     document.getElementById('contactPassword').value = '';
     okBox.innerText = 'Contact information updated successfully.';
     okBox.classList.remove('hidden');
@@ -1171,9 +1157,7 @@ function openSetPasswordScreen(forced) {
     const pwEmail = document.getElementById('pwEmail');
     if (pwEmail) pwEmail.value = currentUser.email || '';
     const cEmail = document.getElementById('contactEmail');
-    const cPhone = document.getElementById('contactPhone');
     if (cEmail) cEmail.value = currentUser.email || '';
-    if (cPhone) cPhone.value = currentUser.phoneNumber || '';
   }
   const cSection = document.getElementById('contactSection');
   if (cSection) cSection.classList.toggle('hidden', forcedPasswordChange);
@@ -1435,12 +1419,6 @@ function getStatusBadge(st) {
   }
 }
 
-function calTile(iso, mini) {
-  const p = dateParts(iso);
-  return `<div class="cal ${mini ? 'mini' : ''}" aria-hidden="true">
-    <div class="mon">${p.mon}</div><div class="day">${p.day}</div><div class="dow">${p.dow.slice(0, 3)}</div>
-  </div>`;
-}
 
 // ============================================================
 // STUDENT PORTAL
@@ -1737,8 +1715,7 @@ function renderStaffDashboard() {
         <div class="cell-sub mono">${esc(req.studentId)}</div></div></td>
       <td data-label="Documents" style="max-width:260px">${itemsLabel(req)}</td>
       <td data-label="OR number" class="mono" style="font-size:13px">${esc(req.orNumber)}</td>
-      <td data-label="Status"><div style="text-align:inherit">${getStatusBadge(req.status)}
-        ${req.status === 'ready' && req.claimDate ? `<div class="cell-sub" style="margin-top:4px">Claim on ${esc(dateParts(req.claimDate).full)}</div>` : ''}</div></td>
+      <td data-label="Status"><div style="text-align:inherit">${getStatusBadge(req.status)}</div></td>
       <td class="actions"><button onclick="openStaffReviewModal('${esc(req.ref)}')" class="btn btn-ghost btn-sm"><i class="fa-solid fa-magnifying-glass"></i> Inspect</button></td>
     </tr>`).join('');
 }
@@ -1798,14 +1775,6 @@ function openStaffReviewModal(ref) {
   document.getElementById('revDocsList').innerHTML = req.items.map(i =>
     `<div class="doc-line">${i.copies}x ${esc(i.name)}</div>`).join('');
 
-  if (req.status === 'ready' && req.claimDate) {
-    const p = dateParts(req.claimDate);
-    show('revClaimBox');
-    document.getElementById('revClaimContent').innerHTML =
-      `<div class="claim" style="margin:0">${calTile(req.claimDate, true)}<div class="txt"><div class="big" style="font-size:16px">${esc(p.dow)}, ${esc(p.full)}</div></div></div>`;
-  } else {
-    hide('revClaimBox');
-  }
 
   if (req.status === 'declined') {
     show('revDeclineReasonBox');
@@ -1824,10 +1793,9 @@ function openStaffReviewModal(ref) {
   if (req.status === 'pending_verification') {
     actions.innerHTML = `<button onclick="openGradesNotice('${esc(req.ref)}')" class="btn btn-primary"><i class="fa-solid fa-check"></i> Verify and begin processing</button>`;
   } else if (req.status === 'processing') {
-    actions.innerHTML = `<button onclick="openReadyModal('${esc(req.ref)}', false)" class="btn btn-primary"><i class="fa-solid fa-box-archive"></i> Mark as ready to claim</button>`;
+    actions.innerHTML = `<button onclick="staffMarkReady('${esc(req.ref)}')" class="btn btn-primary"><i class="fa-solid fa-box-archive"></i> Mark as ready to claim</button>`;
   } else if (req.status === 'ready') {
     actions.innerHTML = `
-      <button onclick="openReadyModal('${esc(req.ref)}', true)" class="btn btn-ghost"><i class="fa-solid fa-calendar-day"></i> Change claim date</button>
       <button onclick="staffMarkCompleted('${esc(req.ref)}')" class="btn btn-primary"><i class="fa-solid fa-check-double"></i> Mark as claimed</button>`;
   } else {
     actions.innerHTML = '<span class="small muted" style="font-weight:600">Request closed</span>';
@@ -1939,40 +1907,9 @@ async function confirmGradesNotice() {
   if (ref) await runStaffAction(`/requests/${encodeURIComponent(ref)}/approve-payment`);
 }
 
-// Ready to claim: the registrar picks the claim date (no past dates). Also used to change it later.
-function openReadyModal(ref, isChange) {
-  const req = requestsData.find(r => r.ref === ref);
-  if (!req) return;
-  readyModalRef = ref;
-  readyModalIsChange = !!isChange;
-  document.getElementById('readyTitle').innerText = isChange ? 'Change the claim date' : 'Set the claim date';
-  document.getElementById('readyConfirmBtn').innerText = isChange ? 'Save claim date' : 'Mark as ready to claim';
-  const input = document.getElementById('readyDate');
-  input.min = todayLocal();
-  input.value = isChange && req.claimDate ? req.claimDate : '';
-  hide('readyError');
-  show('modalReady');
-}
-function closeReadyModal() { hide('modalReady'); readyModalRef = null; }
-async function confirmReadyModal() {
-  const date = document.getElementById('readyDate').value;
-  const err = document.getElementById('readyError');
-  const fail = (m) => { err.innerText = m; err.classList.remove('hidden'); };
-  if (!date) return fail('Pick a claim date.');
-  if (date < todayLocal()) return fail('The claim date cannot be in the past.');
-
-  const ref = readyModalRef;
-  const path = readyModalIsChange ? 'claim-date' : 'mark-ready';
-  try {
-    const updated = await apiRequest('POST', `/requests/${encodeURIComponent(ref)}/${path}`, { claimDate: date });
-    applyUpdatedRequest(updated);
-  } catch (e) {
-    return fail(e.message);
-  }
-  closeReadyModal();
-  closeStaffReviewModal();
-  renderSidebarNav();
-  renderStaffDashboard();
+// Ready to claim: direct one-click action
+async function staffMarkReady(ref) {
+  await runStaffAction(`/requests/${encodeURIComponent(ref)}/mark-ready`);
 }
 
 async function staffMarkCompleted(ref) {

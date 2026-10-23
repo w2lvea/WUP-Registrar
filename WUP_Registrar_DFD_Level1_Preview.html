@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WUP Registrar System - Data Flow Diagram (DFD) Level 1</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #f8fafc;
+      color: #1e293b;
+      line-height: 1.5;
+      padding: 24px;
+    }
+    .container {
+      max-width: 1750px;
+      margin: 0 auto;
+    }
+    .header-card {
+      background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
+      color: #ffffff;
+      padding: 24px 32px;
+      border-radius: 14px;
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2);
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .badge-tag {
+      background: #059669;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+    .header-title h1 {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-title p {
+      font-size: 14px;
+      color: #94a3b8;
+      margin-top: 6px;
+    }
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 8px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+    .btn-primary {
+      background: #059669;
+      color: white;
+      box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+    }
+    .btn-primary:hover { background: #047857; }
+    .btn-secondary {
+      background: #334155;
+      color: white;
+    }
+    .btn-secondary:hover { background: #475569; }
+
+    /* Key Summary Bar */
+    .summary-bar {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px 20px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 12.5px;
+    }
+
+    /* Grid Layout */
+    .dfd-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr 340px;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 1400px) {
+      .dfd-grid { grid-template-columns: 1fr; }
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.05);
+      border: 2px solid transparent;
+      transition: transform 0.15s ease;
+    }
+    .card:hover { transform: translateY(-2px); }
+
+    .card-header {
+      padding: 10px 14px;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-body {
+      padding: 12px 14px;
+      font-size: 12px;
+    }
+
+    /* Styling by Type */
+    .entity-student { border-color: #2563eb; }
+    .entity-student .card-header { background: #1d4ed8; }
+
+    .entity-gateway { border-color: #475569; }
+    .entity-gateway .card-header { background: #334155; }
+
+    .entity-treasury { border-color: #d97706; }
+    .entity-treasury .card-header { background: #b45309; }
+
+    .entity-staff { border-color: #7c3aed; }
+    .entity-staff .card-header { background: #6d28d9; }
+
+    /* Process Cards */
+    .proc-card {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 16px;
+      border-left: 6px solid #059669;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      margin-bottom: 16px;
+    }
+    .proc-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 4px;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+    .proc-1 { border-left-color: #2563eb; }
+    .proc-1 .proc-badge { background: #2563eb; }
+    .proc-2 { border-left-color: #d97706; }
+    .proc-2 .proc-badge { background: #d97706; }
+    .proc-3 { border-left-color: #059669; }
+    .proc-3 .proc-badge { background: #059669; }
+    .proc-4 { border-left-color: #7c3aed; }
+    .proc-4 .proc-badge { background: #7c3aed; }
+    .proc-5 { border-left-color: #0284c7; }
+    .proc-5 .proc-badge { background: #0284c7; }
+    .proc-6 { border-left-color: #db2777; }
+    .proc-6 .proc-badge { background: #db2777; }
+
+    .proc-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+    .proc-desc {
+      font-size: 12px;
+      color: #475569;
+      margin-bottom: 10px;
+    }
+    .flow-tag-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 11px;
+    }
+    .flow-in {
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #065f46;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .flow-out {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .flow-store {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      color: #334155;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    /* Data Stores */
+    .store-box {
+      background: #f8fafc;
+      border: 1.5px solid #334155;
+      border-left: 6px solid #0f172a;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 12px;
+    }
+    .store-badge {
+      background: #0f172a;
+      color: #ffffff;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 10.5px;
+      margin-right: 6px;
+    }
+
+    /* Table of flows */
+    table.flow-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 24px;
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+      font-size: 12px;
+    }
+    table.flow-table th {
+      background: #0f172a;
+      color: #ffffff;
+      padding: 10px 14px;
+      text-align: left;
+    }
+    table.flow-table td {
+      padding: 8px 14px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    table.flow-table tr:nth-child(even) {
+      background-color: #f8fafc;
+    }
+
+    .guide-box {
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 30px;
+      font-size: 13px;
+    }
+    .guide-box h3 {
+      font-size: 16px;
+      color: #065f46;
+      margin-bottom: 10px;
+    }
+    .guide-box ol {
+      margin-left: 20px;
+      margin-bottom: 12px;
+    }
+    .guide-box li {
+      margin-bottom: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header Banner -->
+  <div class="header-card">
+    <div class="header-title">
+      <h1>
+        <span class="badge-tag">DFD LEVEL 1</span>
+        Wesleyan University - Philippines
+      </h1>
+      <p>Data Flow Diagram Level 1 — Plain-English Breakdown of Processes, Actors, and Information Flows</p>
+    </div>
+    <div class="header-actions">
+      <a href="WUP_Registrar_DFD_Level1.drawio" download class="btn btn-primary">
+        📥 Download .drawio File
+      </a>
+      <a href="https://app.diagrams.net/" target="_blank" class="btn btn-secondary">
+        🌐 Open Diagrams.net
+      </a>
+    </div>
+  </div>
+
+  <!-- Key Summary Bar -->
+  <div class="summary-bar">
+    <div><b>💡 What is DFD Level 1?</b> While Level 0 shows the whole system as one single box, <b>Level 1 opens the box</b> and reveals the 6 primary engines running inside!</div>
+    <div style="color: #059669; font-weight: 700;">6 Sub-Processes • 4 External Entities • 5 Data Stores</div>
+  </div>
+
+  <!-- Main DFD Grid -->
+  <div class="dfd-grid">
+    
+    <!-- LEFT: External Entities -->
+    <div class="column">
+      <div style="font-weight: 800; font-size: 14px; color: #0f172a; margin-bottom: 4px;">
+        👤 EXTERNAL ACTORS
+      </div>
+
+      <!-- Student -->
+      <div class="card entity-student">
+        <div class="card-header">
+          <span>🎓 Student</span>
+          <span style="font-size: 10px; opacity: 0.85;">ACTOR</span>
+        </div>
+        <div class="card-body">
+          <b>Role:</b> University students requiring documents (Transcript of Records, Grades, Enrollment).<br><br>
+          <b>Inputs Provided:</b>
+          • Login credentials &amp; OTP<br>
+          • Official Receipt (OR) Number<br>
+          • Clearance &amp; Assessment Slips<br>
+          • Requested document types &amp; copies<br><br>
+          <b>Outputs Received:</b>
+          • Reference Tracking Number<br>
+          • Live status &amp; Claim Pickup Date
+        </div>
+      </div>
+
+      <!-- Cashier / Treasury -->
+      <div class="card entity-treasury">
+        <div class="card-header">
+          <span>🏛️ Cashier / Treasury</span>
+          <span style="font-size: 10px; opacity: 0.85;">ACTOR</span>
+        </div>
+        <div class="card-body">
+          <b>Role:</b> University Finance &amp; Treasury Office.<br><br>
+          <b>Inputs Provided:</b>
+          • Official Receipts (OR) payment records.<br>
+          • Validates student payments.<br><br>
+          <b>Outputs:</b>
+          • Printed physical OR given to student.
+        </div>
+      </div>
+
+      <!-- Registrar Staff -->
+      <div class="card entity-staff">
+        <div class="card-header">
+          <span>💼 Registrar Staff</span>
+          <span style="font-size: 10px; opacity: 0.85;">ACTOR</span>
+        </div>
+        <div class="card-body">
+          <b>Role:</b> Office of Records Personnel.<br><br>
+          <b>Inputs Provided:</b>
+          • Approvals / Declines<br>
+          • Pickup Claim Dates<br>
+          • Price &amp; Catalog updates<br><br>
+          <b>Outputs Received:</b>
+          • Dashboard with pending requests &amp; photos.
+        </div>
+      </div>
+
+      <!-- SMS & Email Gateways -->
+      <div class="card entity-gateway">
+        <div class="card-header">
+          <span>📲 Notification Gateways</span>
+          <span style="font-size: 10px; opacity: 0.85;">SERVICE</span>
+        </div>
+        <div class="card-body">
+          <b>Role:</b> External communication channels.<br><br>
+          • <b>Semaphore:</b> SMS OTP sender.<br>
+          • <b>EmailJS:</b> Email OTP sender.<br>
+          • Sends 6-digit codes for recovery.
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER: The 6 Processes -->
+    <div class="column">
+      <div style="font-weight: 800; font-size: 14px; color: #0f172a; margin-bottom: 4px;">
+        ⚙️ CORE SUB-PROCESSES (The System Engines)
+      </div>
+
+      <!-- Process 1.0 -->
+      <div class="proc-card proc-1">
+        <span class="proc-badge">PROCESS 1.0</span>
+        <div class="proc-title">User Authentication &amp; Password Recovery</div>
+        <div class="proc-desc">
+          Verifies student/staff credentials against encrypted hashes, issues secure HTTP-only session cookies, forces first-time password changes, and dispatches 6-digit OTP codes via SMS or Email for account recovery.
+        </div>
+        <div class="flow-tag-container">
+          <span class="flow-in">📥 In: Username &amp; Password</span>
+          <span class="flow-store">🗄️ Store: D1 User Accounts</span>
+          <span class="flow-out">📤 Out: Session Token / OTP Code</span>
+        </div>
+      </div>
+
+      <!-- Process 2.0 -->
+      <div class="proc-card proc-2">
+        <span class="proc-badge">PROCESS 2.0</span>
+        <div class="proc-title">Receipt &amp; Payment Validation</div>
+        <div class="proc-desc">
+          Checks the student's entered Official Receipt (OR) Number against Cashier records in the database. Verifies payment amount and strictly enforces the <b>single-use rule</b> (a receipt cannot be used more than once).
+        </div>
+        <div class="flow-tag-container">
+          <span class="flow-in">📥 In: OR Number &amp; Student ID</span>
+          <span class="flow-store">🗄️ Store: D2 Official Receipts</span>
+          <span class="flow-out">📤 Out: Receipt Validity Status</span>
+        </div>
+      </div>
+
+      <!-- Process 3.0 -->
+      <div class="proc-card proc-3">
+        <span class="proc-badge">PROCESS 3.0</span>
+        <div class="proc-title">Document Request Submission &amp; Filing</div>
+        <div class="proc-desc">
+          Bundles the student's requested documents (e.g. 1 Transcript of Records + 2 Certificate of Grades), uploaded assessment slips, and clearance photos into an active request ticket with a unique reference number (e.g. <code>REQ-2026-001</code>).
+        </div>
+        <div class="flow-tag-container">
+          <span class="flow-in">📥 In: Selected Documents &amp; Photos</span>
+          <span class="flow-store">🗄️ Store: D3 Requests &amp; D4 Timeline</span>
+          <span class="flow-out">📤 Out: Tracking Reference #</span>
+        </div>
+      </div>
+
+      <!-- Process 4.0 -->
+      <div class="proc-card proc-4">
+        <span class="proc-badge">PROCESS 4.0</span>
+        <div class="proc-title">Request Review &amp; Document Processing</div>
+        <div class="proc-desc">
+          Registrar officers inspect the submitted clearance photos and Treasury receipts. They advance the request through stages: <i>Pending Review ➔ Processing ➔ Ready</i>, assign a scheduled pickup <b>Claim Date</b>, or <b>Decline</b> with a written explanation.
+        </div>
+        <div class="flow-tag-container">
+          <span class="flow-in">📥 In: Staff Decision &amp; Claim Date</span>
+          <span class="flow-store">🗄️ Store: D3 Requests &amp; D4 Timeline</span>
+          <span class="flow-out">📤 Out: Status Update Notification</span>
+        </div>
+      </div>
+
+      <!-- Process 5.0 -->
+      <div class="proc-card proc-5">
+        <span class="proc-badge">PROCESS 5.0</span>
+        <div class="proc-title">Status Tracking &amp; Document Pickup</div>
+        <div class="proc-desc">
+          Displays real-time timeline milestones for the student to follow every step. When the student arrives on their scheduled claim date, the registrar marks the document as <b>Completed / Claimed</b>.
+        </div>
+        <div class="flow-tag-container">
+          <span class="flow-in">📥 In: Reference Code Lookup</span>
+          <span class="flow-store">🗄️ Store: D4 Request Timeline</span>
+          <span class="flow-out">📤 Out: Milestone Journey &amp; Pickup Notice</span>
+        </div>
+      </div>
+
+      <!-- Process 6.0 -->
+      <div class="proc-card proc-6">
+        <span class="proc-badge">PROCESS 6.0</span>
+        <div class="proc-title">Catalog &amp; Clearance Fees Management</div>
+        <div class="proc-desc">
+          Registrar administrators manage which document types are currently available, set processing lead times (e.g. 5-7 days for TOR), and maintain the official university clearance fees price schedule.
+        </div>
+        <div class="flow-tag-container">
+          <span class="flow-in">📥 In: Price &amp; Catalog Edits</span>
+          <span class="flow-store">🗄️ Store: D5 Documents &amp; Fees</span>
+          <span class="flow-out">📤 Out: Updated Catalog to Form</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Data Stores & Guide -->
+    <div class="column">
+      <div style="font-weight: 800; font-size: 14px; color: #0f172a; margin-bottom: 4px;">
+        🗄️ DATA STORES (Databases)
+      </div>
+
+      <div class="store-box" style="border-left-color: #2563eb;">
+        <span class="store-badge">D1</span> <b>User Accounts &amp; Sessions</b>
+        <div style="color: #64748b; font-size: 11px; margin-top: 4px;">
+          Stores student profiles, registrar staff accounts, active login cookies, and password recovery OTP PINs.
+        </div>
+      </div>
+
+      <div class="store-box" style="border-left-color: #d97706;">
+        <span class="store-badge">D2</span> <b>Official Receipts Store</b>
+        <div style="color: #64748b; font-size: 11px; margin-top: 4px;">
+          Treasury cashier database storing issued OR numbers, student names, amounts paid, and issue dates.
+        </div>
+      </div>
+
+      <div class="store-box" style="border-left-color: #059669;">
+        <span class="store-badge">D3</span> <b>Document Requests &amp; Items</b>
+        <div style="color: #64748b; font-size: 11px; margin-top: 4px;">
+          Active requests, uploaded clearance photos, document items list, copy counts, and assigned claim dates.
+        </div>
+      </div>
+
+      <div class="store-box" style="border-left-color: #0284c7;">
+        <span class="store-badge">D4</span> <b>Request Timeline &amp; Audit</b>
+        <div style="color: #64748b; font-size: 11px; margin-top: 4px;">
+          Chronological milestone log of each step (Submitted, Verified, Processing, Ready, Claimed, Declined).
+        </div>
+      </div>
+
+      <div class="store-box" style="border-left-color: #db2777;">
+        <span class="store-badge">D5</span> <b>Documents &amp; Fees Catalog</b>
+        <div style="color: #64748b; font-size: 11px; margin-top: 4px;">
+          University reference catalog of requestable certificates, lead times, and official fee prices.
+        </div>
+      </div>
+
+      <!-- Quick How to Open Box -->
+      <div class="card" style="border-color: #6366f1; margin-top: 10px;">
+        <div class="card-header" style="background: #4f46e5;">
+          <span>💡 DFD Level 1 Symbols</span>
+        </div>
+        <div class="card-body" style="font-size: 11.5px; line-height: 1.5;">
+          • <b>Square Box:</b> External Actor outside the system.<br>
+          • <b>Rounded Box:</b> Core sub-process inside the system.<br>
+          • <b>Open Bracket [D1]:</b> Data Store (Database table).<br>
+          • <b>Labeled Arrow:</b> Information moving from point A to B.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Complete Flow Mapping Table -->
+  <table class="flow-table">
+    <thead>
+      <tr>
+        <th>Data Flow Name</th>
+        <th>Source</th>
+        <th>Destination</th>
+        <th>Purpose / Data Transferred</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>Login Credentials</b></td>
+        <td>Student / Staff</td>
+        <td>Process 1.0 (Auth)</td>
+        <td>Username, student ID, and password hash verification.</td>
+      </tr>
+      <tr>
+        <td><b>Recovery OTP</b></td>
+        <td>Process 1.0</td>
+        <td>SMS / Email Gateways</td>
+        <td>6-digit one-time PIN sent to student's mobile number or email.</td>
+      </tr>
+      <tr>
+        <td><b>OR Number</b></td>
+        <td>Student</td>
+        <td>Process 2.0 (Receipt Check)</td>
+        <td>Official Receipt # entered by student to verify against cashier records.</td>
+      </tr>
+      <tr>
+        <td><b>Receipt Verification</b></td>
+        <td>Process 2.0</td>
+        <td>Process 3.0 (Submission)</td>
+        <td>Confirms payment is genuine and marks receipt as single-use locked.</td>
+      </tr>
+      <tr>
+        <td><b>Request Application</b></td>
+        <td>Student</td>
+        <td>Process 3.0 (Submission)</td>
+        <td>Document selections, copy counts, assessment slip &amp; clearance photos.</td>
+      </tr>
+      <tr>
+        <td><b>Request Record</b></td>
+        <td>Process 3.0</td>
+        <td>D3 &amp; D4 Stores</td>
+        <td>Saves ticket (REQ-XXXX) in <code>requests</code> and initial timeline event in <code>request_timeline</code>.</td>
+      </tr>
+      <tr>
+        <td><b>Staff Review Decision</b></td>
+        <td>Registrar Staff</td>
+        <td>Process 4.0 (Processing)</td>
+        <td>Approval, Claim Date pickup scheduling, or Decline with explanation.</td>
+      </tr>
+      <tr>
+        <td><b>Live Timeline Tracking</b></td>
+        <td>D4 Timeline</td>
+        <td>Process 5.0 ➔ Student</td>
+        <td>Real-time milestone progress displayed on student dashboard.</td>
+      </tr>
+      <tr>
+        <td><b>Fee / Catalog Updates</b></td>
+        <td>Registrar Staff</td>
+        <td>Process 6.0 ➔ D5 Store</td>
+        <td>Price adjustments, document activation/deactivation, and processing lead times.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Guide Box -->
+  <div class="guide-box">
+    <h3>🚀 How to Open and Edit the DFD in Draw.io (diagrams.net):</h3>
+    <ol>
+      <li>Go to <a href="https://app.diagrams.net" target="_blank" style="color: #059669; font-weight: bold;">app.diagrams.net</a> (or open Draw.io Desktop).</li>
+      <li>Click <b>"Open Existing Diagram"</b> (or choose <b>File &gt; Open From &gt; Device</b>).</li>
+      <li>Select the file <b><code>WUP_Registrar_DFD_Level1.drawio</code></b> in your project folder: <br>
+      <code>c:\Users\joshua\Downloads\wup-registrar-system-main-uncom\wup-registrar-system-main-uncom\WUP_Registrar_DFD_Level1.drawio</code></li>
+      <li>You can now present, customize, drag boxes, or export as high-resolution PNG, PDF, or SVG.</li>
+    </ol>
+  </div>
+</div>
+
+</body>
+</html>
