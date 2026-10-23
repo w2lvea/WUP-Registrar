@@ -1,0 +1,19 @@
+{
+  "name": "wup-registrar-system",
+  "version": "1.0.0",
+  "description": "WUP Online Student Document Request and Tracking System — Express + SQLite backend",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "migrate:supabase": "node migrate_to_supabase.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "express": "^4.19.2",
+    "pg": "^8.23.1"
+  }
+}

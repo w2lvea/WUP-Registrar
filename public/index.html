@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WUP - Online Student Document Request and Tracking System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="styles.css?v=2.7_fancy" />
+</head>
+<body>
+
+  <!-- ============================================================ -->
+  <!-- AUTH SHELL: Login and Set a New Password (no sidebar)         -->
+  <!-- ============================================================ -->
+  <div id="authShell" class="auth">
+    <aside class="auth-aside">
+      <div class="auth-brand">
+        <img src="assets/logo.png" alt="Wesleyan University-Philippines seal" />
+        <div class="name">Wesleyan University<br />Philippines</div>
+      </div>
+      <div>
+        <h1>Request your records online.</h1>
+        <p class="lead">File a document request, follow its progress, and see exactly when to claim it at the Registrar.</p>
+      </div>
+    </aside>
+
+    <main class="auth-main">
+      <button id="authBackBtn" onclick="handleAuthBack()" class="auth-back hidden">
+        <i class="fa-solid fa-arrow-left"></i> Back
+      </button>
+
+      <!-- VIEW: LOGIN -->
+      <section id="viewLogin" class="auth-card">
+        <h2>Sign in</h2>
+        <p class="muted" style="margin-top:6px">Use your credentials.</p>
+        <form id="loginForm" onsubmit="handleUnifiedLogin(event)">
+          <label class="field">
+            <span class="label">User ID or username</span>
+            <span class="input-wrap">
+              <i class="fa-solid fa-user lead-icon"></i>
+              <input type="text" id="inputUsername" class="input has-icon" required placeholder="WUP-24-1122-112" autocomplete="username" />
+            </span>
+          </label>
+
+          <div>
+            <label class="field">
+              <span class="label">Password</span>
+              <span class="input-wrap">
+                <i class="fa-solid fa-lock lead-icon"></i>
+                <input type="password" id="inputPassword" class="input has-icon" required placeholder="Enter your password" autocomplete="current-password" />
+                <button type="button" class="trail-btn" onclick="togglePasswordVisibility()" aria-label="Show or hide password">
+                  <i id="eyeIcon" class="fa-regular fa-eye"></i>
+                </button>
+              </span>
+            </label>
+            <button type="button" onclick="openForgotPasswordInfo()" class="link-btn" style="margin-top:8px">Forgot password?</button>
+          </div>
+
+          <p id="loginError" class="notice-error hidden">
+            <i class="fa-solid fa-circle-exclamation"></i> Incorrect User ID/Username or Password. Please try again.
+          </p>
+
+          <button type="submit" class="btn btn-primary btn-block" style="padding:13px 18px">Sign in</button>
+        </form>
+      </section>
+
+      <!-- VIEW: SET A NEW PASSWORD (first login, or from the account button) -->
+      <section id="viewSetPassword" class="auth-card hidden">
+        <span id="requiredTag" class="required-tag hidden">Required before you continue</span>
+        <h2>Set a new password</h2>
+        <p id="setPwIntro" class="muted" style="margin-top:6px">Choose a password you haven't used before. You'll use it the next time you sign in.</p>
+        <form id="setPasswordForm" onsubmit="handleSetPasswordSubmit(event)">
+          <label class="field">
+            <span class="label">Current password</span>
+            <span class="input-wrap">
+              <i class="fa-solid fa-lock lead-icon"></i>
+              <input type="password" id="pwCurrent" class="input has-icon" required placeholder="Enter current password" autocomplete="current-password" />
+            </span>
+          </label>
+          <label class="field">
+            <span class="label">Email address</span>
+            <span class="input-wrap">
+              <i class="fa-solid fa-envelope lead-icon"></i>
+              <input type="email" id="pwEmail" class="input has-icon" required placeholder="Enter email address (e.g. you@gmail.com)" autocomplete="email" />
+            </span>
+            <span class="help">Used to receive verification codes if you need to recover or change your password.</span>
+          </label>
+          <label class="field">
+            <span class="label">New password</span>
+            <span class="input-wrap">
+              <i class="fa-solid fa-key lead-icon"></i>
+              <input type="password" id="pwNew" class="input has-icon" required placeholder="Enter new password" oninput="updatePwMeter()" autocomplete="new-password" />
+            </span>
+          </label>
+          <label class="field">
+            <span class="label">Confirm new password</span>
+            <span class="input-wrap">
+              <i class="fa-solid fa-key lead-icon"></i>
+              <input type="password" id="pwConfirm" class="input has-icon" required placeholder="Enter the new password again" autocomplete="new-password" />
+            </span>
+          </label>
+
+          <div>
+            <div class="pw-meter" id="pwMeterBar">
+              <div class="pw-meter-segment"></div><div class="pw-meter-segment"></div>
+              <div class="pw-meter-segment"></div><div class="pw-meter-segment"></div>
+            </div>
+            <p class="help">Use 8 or more characters with a mix of letters, numbers and symbols.</p>
+          </div>
+
+          <p id="setPwError" class="notice-error hidden"></p>
+          <button type="submit" class="btn btn-primary btn-block" style="padding:13px 18px">Update password</button>
+        </form>
+
+        <div id="usernameSection" class="hidden" style="margin-top:28px;padding-top:22px;border-top:1px solid var(--line)">
+          <h2 style="font-size:20px">Change username</h2>
+          <p id="currentUsernameLine" class="muted" style="margin-top:6px"></p>
+          <form id="usernameForm" onsubmit="handleChangeUsername(event)">
+            <label class="field">
+              <span class="label">New username</span>
+              <span class="input-wrap">
+                <i class="fa-solid fa-user-pen lead-icon"></i>
+                <input type="text" id="unNew" class="input has-icon" required minlength="4" maxlength="30" placeholder="e.g. juan.delacruz" autocomplete="off" />
+              </span>
+              <span class="help">4 to 30 characters: letters, numbers, dots, dashes and underscores.</span>
+            </label>
+            <label class="field">
+              <span class="label">Current password</span>
+              <span class="input-wrap">
+                <i class="fa-solid fa-lock lead-icon"></i>
+                <input type="password" id="unPassword" class="input has-icon" required placeholder="Enter your current password" autocomplete="current-password" />
+              </span>
+            </label>
+            <p id="unError" class="notice-error hidden"></p>
+            <p id="unSuccess" class="hidden" style="color:var(--ok);font-weight:700"></p>
+            <button type="submit" class="btn btn-primary btn-block" style="padding:13px 18px">Update username</button>
+          </form>
+        </div>
+
+        <div id="contactSection" class="hidden" style="margin-top:28px;padding-top:22px;border-top:1px solid var(--line)">
+          <h2 style="font-size:20px">Contact information</h2>
+          <p class="muted" style="margin-top:6px">Manage your registered phone number and email for OTP password recovery.</p>
+          <form id="contactForm" onsubmit="handleChangeContact(event)" style="margin-top:14px">
+            <label class="field">
+              <span class="label">Email address</span>
+              <span class="input-wrap">
+                <i class="fa-solid fa-envelope lead-icon"></i>
+                <input type="email" id="contactEmail" class="input has-icon" placeholder="your_email@gmail.com" />
+              </span>
+            </label>
+            <label class="field" style="margin-top:12px">
+              <span class="label">Mobile phone number</span>
+              <span class="input-wrap">
+                <i class="fa-solid fa-mobile-screen lead-icon"></i>
+                <input type="tel" id="contactPhone" class="input has-icon" placeholder="09181234567" />
+              </span>
+              <span class="help">Philippine mobile number format: 09XXXXXXXXX</span>
+            </label>
+            <label class="field" style="margin-top:12px">
+              <span class="label">Current password</span>
+              <span class="input-wrap">
+                <i class="fa-solid fa-lock lead-icon"></i>
+                <input type="password" id="contactPassword" class="input has-icon" required placeholder="Enter your current password" autocomplete="current-password" />
+              </span>
+            </label>
+            <p id="contactError" class="notice-error hidden" style="margin-top:10px"></p>
+            <p id="contactSuccess" class="hidden" style="color:var(--ok);font-weight:700;margin-top:10px"></p>
+            <button type="submit" class="btn btn-primary btn-block" style="padding:13px 18px;margin-top:14px">Save contact information</button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- APP SHELL: sidebar layout for students and registrar staff    -->
+  <!-- ============================================================ -->
+  <div id="appShell" class="app hidden">
+    <div id="sidebarBackdrop" class="backdrop hidden" onclick="closeMobileSidebar()"></div>
+
+    <aside id="sidebarAside" class="sidebar">
+      <button class="sidebar-close" onclick="closeMobileSidebar()" aria-label="Close menu"><i class="fa-solid fa-xmark"></i></button>
+      <div class="sidebar-brand">
+        <img src="assets/logo.png" alt="WUP seal" />
+        <div>
+          <div class="t1">Wesleyan</div>
+          <div class="t2">Office of Records</div>
+        </div>
+      </div>
+
+      <nav id="sidebarNav" aria-label="Main"></nav>
+
+      <div class="sidebar-foot">
+        <button onclick="handleLogout()" class="side-nav-item"><i class="fa-solid fa-arrow-right-from-bracket"></i> Log out</button>
+        <button id="roleBottomPill" onclick="handleRolePillClick()" class="account-btn" title="Change password">
+          <span class="avatar"><i id="accountIcon" class="fa-solid fa-user"></i></span>
+          <span>
+            <span class="who" id="roleBottomPillLabel" style="display:block">Student</span>
+            <span class="hint">Change password</span>
+          </span>
+        </button>
+      </div>
+    </aside>
+
+    <main class="main" id="mainScroll">
+
+      <!-- VIEW: STUDENT REQUESTS -->
+      <section id="viewStudent" class="view hidden">
+        <div class="page-head">
+          <div style="display:flex;gap:12px;align-items:flex-start;min-width:0">
+            <button onclick="openMobileSidebar()" class="icon-btn menu-btn" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
+            <div style="min-width:0">
+              <div class="xs muted mono" id="dispStudentId"></div>
+              <h2 id="dispStudentName"></h2>
+              <p id="dispStudentCourse"></p>
+            </div>
+          </div>
+          <div class="actions">
+            <button onclick="openNewRequestModal()" class="btn btn-gold"><i class="fa-solid fa-file-circle-plus"></i> <span class="btn-label">New request</span></button>
+          </div>
+        </div>
+        <div id="studentRequestsContainer" class="req-list"></div>
+      </section>
+
+      <!-- VIEW: STAFF REQUEST QUEUE -->
+      <section id="viewStaff" class="view hidden">
+        <div class="page-head">
+          <div style="display:flex;gap:12px;align-items:flex-start;min-width:0">
+            <button onclick="openMobileSidebar()" class="icon-btn menu-btn" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
+            <div>
+              <h2>Document requests</h2>
+              <p>Check each student's OR number and Assessment Form, process the request, then set the date to claim it.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat alert"><div class="n" id="metricPending">0</div><div class="l">Pending review</div></div>
+          <div class="stat"><div class="n" id="metricProcessing">0</div><div class="l">In processing</div></div>
+          <div class="stat"><div class="n" id="metricReady">0</div><div class="l">Ready to claim</div></div>
+          <div class="stat"><div class="n" id="metricDeclined">0</div><div class="l">Declined</div></div>
+        </div>
+
+        <div class="toolbar">
+          <span class="input-wrap">
+            <i class="fa-solid fa-magnifying-glass lead-icon"></i>
+            <input type="text" id="staffSearchInput" oninput="renderStaffDashboard()" class="input has-icon" placeholder="Search by student ID, name, reference or OR number" />
+          </span>
+        </div>
+
+        <div class="panel table-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Reference</th>
+                <th>Student</th>
+                <th>Documents</th>
+                <th>OR number</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="staffTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- VIEW: DOCUMENTS (registrar only) -->
+      <section id="viewDocuments" class="view hidden">
+        <div class="page-head">
+          <div style="display:flex;gap:12px;align-items:flex-start;min-width:0">
+            <button onclick="openMobileSidebar()" class="icon-btn menu-btn" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
+            <div>
+              <h2>Documents</h2>
+              <p>The documents students can request. Turn a document off to hide it from new requests; old requests keep working.</p>
+            </div>
+          </div>
+          <div class="actions">
+            <button onclick="openDocForm(null)" class="btn btn-primary"><i class="fa-solid fa-plus"></i> <span class="btn-label">Add document</span></button>
+          </div>
+        </div>
+        <div class="panel table-wrap">
+          <table class="tbl">
+            <thead>
+              <tr><th>Document</th><th>Description</th><th>Available to students</th><th></th></tr>
+            </thead>
+            <tbody id="documentsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- VIEW: CLEARANCE FEES (students read, registrar edits) -->
+      <section id="viewFees" class="view hidden">
+        <div class="page-head">
+          <div style="display:flex;gap:12px;align-items:flex-start;min-width:0">
+            <button onclick="openMobileSidebar()" class="icon-btn menu-btn" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
+            <div>
+              <h2>Clearance fees</h2>
+              <p id="feesIntro">What each document costs. Pay at the Treasury, then enter the OR number the Treasury gives you when you file your request.</p>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="table-wrap">
+            <table class="tbl">
+              <thead><tr><th>Document</th><th id="feesStatusHead">Online request</th><th class="num">Fee</th><th id="feesActionHead"></th></tr></thead>
+              <tbody id="feesBody"></tbody>
+            </table>
+          </div>
+          <div class="fee-note">Fees are for reference. Payment is made at the Treasury, not in this system.</div>
+        </div>
+      </section>
+
+      <!-- VIEW: OFFICIAL RECEIPTS (registrar only) -->
+      <section id="viewReceipts" class="view hidden">
+        <div class="page-head">
+          <div style="display:flex;gap:12px;align-items:flex-start;min-width:0">
+            <button onclick="openMobileSidebar()" class="icon-btn menu-btn" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
+            <div>
+              <h2>Treasury Official Receipts</h2>
+              <p>Valid receipt records from the Treasury. Students can only submit document requests using verified receipts from this database.</p>
+            </div>
+          </div>
+          <div class="actions">
+            <button onclick="openReceiptForm()" class="btn btn-primary"><i class="fa-solid fa-plus"></i> <span class="btn-label">Add receipt</span></button>
+          </div>
+        </div>
+        <div class="panel">
+          <div style="padding:14px 20px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center">
+            <div class="input-wrap" style="max-width:340px;width:100%">
+              <i class="fa-solid fa-magnifying-glass lead-icon"></i>
+              <input type="text" id="receiptSearchInput" class="input has-icon small" placeholder="Search by OR number, student..." oninput="handleReceiptSearch(this.value)" />
+            </div>
+            <div class="small muted" id="receiptsCountSummary" style="margin-left:auto"></div>
+          </div>
+          <div class="table-wrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>OR Number</th>
+                  <th>Payor / Student</th>
+                  <th class="num">Amount</th>
+                  <th>Particulars</th>
+                  <th>Date Issued</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="receiptsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- ============================================================ -->
+  <!-- FORGOT PASSWORD MODAL (Multi-step OTP Recovery Flow)           -->
+  <!-- ============================================================ -->
+  <div id="modalForgotInfo" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="forgotModalTitle">
+    <div class="modal-card forgot-modal-card fancy-recovery-card">
+      
+      <!-- Gradient Header Banner -->
+      <div class="modal-head fancy-recovery-head">
+        <div class="fancy-head-left">
+          <div class="fancy-head-icon">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div>
+            <h3 id="forgotModalTitle" class="fancy-head-title">Password Recovery</h3>
+            <p class="fancy-head-subtitle">Wesleyan University-Philippines &bull; Secure Email OTP</p>
+          </div>
+        </div>
+        <button class="fancy-modal-close" onclick="closeForgotPasswordInfo()" aria-label="Close dialog">&times;</button>
+      </div>
+
+      <!-- Segmented Pipeline Stepper -->
+      <div class="fancy-stepper-wrap">
+        <div class="forgot-stepper" id="forgotStepper">
+          <div class="step-pill active" id="stepPill1">
+            <span class="step-pill-indicator">
+              <span class="pill-number">1</span>
+              <i class="fa-solid fa-check pill-check"></i>
+            </span>
+            <span class="step-pill-label">Identify</span>
+          </div>
+          <div class="step-line" id="stepLine1"></div>
+          
+          <div class="step-pill" id="stepPill2">
+            <span class="step-pill-indicator">
+              <span class="pill-number">2</span>
+              <i class="fa-solid fa-check pill-check"></i>
+            </span>
+            <span class="step-pill-label">Email OTP</span>
+          </div>
+          <div class="step-line" id="stepLine2"></div>
+          
+          <div class="step-pill" id="stepPill3">
+            <span class="step-pill-indicator">
+              <span class="pill-number">3</span>
+              <i class="fa-solid fa-check pill-check"></i>
+            </span>
+            <span class="step-pill-label">Verify</span>
+          </div>
+          <div class="step-line" id="stepLine3"></div>
+          
+          <div class="step-pill" id="stepPill4">
+            <span class="step-pill-indicator">
+              <span class="pill-number">4</span>
+              <i class="fa-solid fa-check pill-check"></i>
+            </span>
+            <span class="step-pill-label">New Password</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 1: Enter User ID or Username -->
+      <div id="forgotStep1" class="modal-body forgot-step-body">
+        <div class="step-intro-card">
+          <div class="step-intro-icon"><i class="fa-solid fa-user-shield"></i></div>
+          <div class="step-intro-text">
+            <h4>Find Your Account</h4>
+            <p>Enter your <strong>Student ID</strong> (e.g. <code>WUP-24-1123-132</code>) or staff username.</p>
+          </div>
+        </div>
+
+        <form onsubmit="handleForgotLookup(event)" id="forgotLookupForm" style="margin-top:16px">
+          <label class="field">
+            <span class="label" style="font-weight:700">Student ID, Username, or Registered Email</span>
+            <span class="input-wrap fancy-input-wrap">
+              <i class="fa-solid fa-id-card lead-icon"></i>
+              <input type="text" id="forgotIdentifierInput" class="input has-icon fancy-input" required placeholder="e.g. WUP-24-1122-112, username, or you@gmail.com" autocomplete="username" />
+            </span>
+          </label>
+
+          <div class="quick-chips-wrap">
+            <span class="quick-chip-label"><i class="fa-solid fa-bolt" style="color:var(--gold)"></i> Quick test:</span>
+            <button type="button" class="quick-chip fancy" onclick="fillForgotIdentifier('WUP-24-1123-132')"><i class="fa-solid fa-user-graduate"></i> Joshua Lleva (WUP-24-1123-132)</button>
+            <button type="button" class="quick-chip fancy" onclick="fillForgotIdentifier('WUP-24-1122-112')"><i class="fa-solid fa-user-graduate"></i> Dave Sabite (WUP-24-1122-112)</button>
+            <button type="button" class="quick-chip fancy" onclick="fillForgotIdentifier('jelai')"><i class="fa-solid fa-user-tie"></i> Staff (jelai)</button>
+          </div>
+
+          <p id="forgotStep1Error" class="notice-error hidden" style="margin-top:14px"></p>
+
+          <div style="margin-top:26px; display:flex; justify-content:space-between; align-items:center">
+            <button type="button" class="btn btn-ghost" onclick="closeForgotPasswordInfo()"><i class="fa-solid fa-xmark"></i> Cancel</button>
+            <button type="submit" id="btnForgotFindAccount" class="btn btn-primary btn-fancy">
+              <span>Find Account</span> <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- STEP 2: Send Email OTP (MailJS) -->
+      <div id="forgotStep2" class="modal-body forgot-step-body hidden">
+        <div class="account-matched-banner fancy-matched-card" id="accountMatchedBanner">
+          <div class="matched-avatar fancy-avatar"><i class="fa-solid fa-user-graduate"></i></div>
+          <div class="matched-info">
+            <div style="display:flex; align-items:center; gap:8px">
+              <div class="matched-name" id="forgotMatchedName">Student Name</div>
+              <span class="fancy-verified-badge"><i class="fa-solid fa-circle-check"></i> Matched</span>
+            </div>
+            <div class="matched-meta" id="forgotMatchedMeta">ID: WUP-24-1123-132</div>
+          </div>
+        </div>
+
+        <div style="margin-top:18px">
+          <!-- Email Delivery Card -->
+          <div class="channel-card active fancy-channel-card" id="channelCardEmail">
+            <div class="channel-head">
+              <div class="channel-icon mail-icon fancy-mail-icon"><i class="fa-solid fa-envelope"></i></div>
+              <div class="channel-meta" style="flex:1">
+                <div class="channel-title">
+                  <span style="font-weight:700">Recipient Recovery Email</span>
+                  <span class="channel-badge badge-mailjs"><i class="fa-solid fa-paper-plane"></i> MailJS</span>
+                </div>
+                <div class="channel-dest fancy-email-display" id="channelEmailDest">j***a@gmail.com</div>
+              </div>
+            </div>
+            <p class="channel-subtext">A secure 6-digit one-time password will be delivered directly to this email inbox.</p>
+
+            <div class="channel-foot-link">
+              <button type="button" class="channel-settings-btn fancy-settings-btn" onclick="openEmailjsConfigModal(event)">
+                <i class="fa-solid fa-sliders"></i> Configure MailJS Keys
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p id="forgotStep2Error" class="notice-error hidden" style="margin-top:14px"></p>
+
+        <div style="margin-top:26px; display:flex; justify-content:space-between; align-items:center">
+          <button type="button" class="btn btn-ghost" onclick="goToForgotStep(1)">
+            <i class="fa-solid fa-arrow-left"></i> Back
+          </button>
+          <button type="button" id="btnForgotSendOtp" class="btn btn-primary btn-fancy" onclick="handleForgotSendOtp()">
+            <span>Send Email Verification Code</span> <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 3: Enter 6-digit OTP -->
+      <div id="forgotStep3" class="modal-body forgot-step-body hidden">
+        <div class="modal-center" style="margin-bottom:18px">
+          <div class="otp-banner-icon fancy-otp-icon"><i class="fa-solid fa-shield-halved"></i></div>
+          <h4 style="font-size:20px; font-weight:800; color:var(--violet-deep); margin-top:10px">Enter 6-Digit Verification Code</h4>
+          <p class="muted small" style="margin-top:4px">
+            We sent a verification code to <strong id="forgotSentTarget" class="fancy-target-pill">...</strong>
+          </p>
+        </div>
+
+        <!-- MailJS Status Banner -->
+        <div id="forgotDispatchNotice" class="dispatch-notice hidden"></div>
+
+        <!-- 6 Individual Digit Inputs -->
+        <div class="otp-digit-group fancy-otp-group" id="otpDigitGroup">
+          <input type="text" class="otp-input fancy-otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]" data-idx="0" autocomplete="one-time-code" autofocus />
+          <input type="text" class="otp-input fancy-otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]" data-idx="1" />
+          <input type="text" class="otp-input fancy-otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]" data-idx="2" />
+          <input type="text" class="otp-input fancy-otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]" data-idx="3" />
+          <input type="text" class="otp-input fancy-otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]" data-idx="4" />
+          <input type="text" class="otp-input fancy-otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]" data-idx="5" />
+        </div>
+
+        <div class="otp-timer-row fancy-timer-row">
+          <span class="timer-badge fancy-timer-badge" id="otpTimerDisplay"><i class="fa-regular fa-clock"></i> Code expires in: 10:00</span>
+          <button type="button" id="btnResendOtp" class="link-btn small fancy-resend-btn" onclick="handleResendOtp()" disabled>
+            <i class="fa-solid fa-rotate-right"></i> Resend Code (<span id="resendCountdown">30</span>s)
+          </button>
+        </div>
+
+        <p id="forgotStep3Error" class="notice-error hidden" style="margin-top:14px"></p>
+
+        <div style="margin-top:26px; display:flex; justify-content:space-between; align-items:center">
+          <button type="button" class="btn btn-ghost" onclick="goToForgotStep(2)">
+            <i class="fa-solid fa-arrow-left"></i> Back to Email
+          </button>
+          <button type="button" id="btnVerifyOtp" class="btn btn-primary btn-fancy" onclick="handleForgotVerifyOtp()">
+            <span>Verify & Continue</span> <i class="fa-solid fa-check"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 4: Set New Password -->
+      <div id="forgotStep4" class="modal-body forgot-step-body hidden">
+        <div class="step-intro-card">
+          <div class="step-intro-icon"><i class="fa-solid fa-lock"></i></div>
+          <div class="step-intro-text">
+            <h4>Create New Password</h4>
+            <p>Choose a strong password with at least 8 characters for your account.</p>
+          </div>
+        </div>
+
+        <form onsubmit="handleForgotResetPassword(event)" id="forgotResetPwForm" style="margin-top:16px">
+          <label class="field">
+            <span class="label" style="font-weight:700">New Password</span>
+            <span class="input-wrap fancy-input-wrap">
+              <i class="fa-solid fa-lock lead-icon"></i>
+              <input type="password" id="forgotNewPassword" class="input has-icon fancy-input" required minlength="8" placeholder="Enter new password" oninput="updateForgotPwMeter()" autocomplete="new-password" />
+              <button type="button" class="trail-btn" onclick="toggleForgotPwVisibility('forgotNewPassword', this)" aria-label="Toggle password">
+                <i class="fa-regular fa-eye"></i>
+              </button>
+            </span>
+          </label>
+
+          <label class="field" style="margin-top:14px">
+            <span class="label" style="font-weight:700">Confirm New Password</span>
+            <span class="input-wrap fancy-input-wrap">
+              <i class="fa-solid fa-lock lead-icon"></i>
+              <input type="password" id="forgotConfirmPassword" class="input has-icon fancy-input" required minlength="8" placeholder="Re-enter new password" autocomplete="new-password" />
+              <button type="button" class="trail-btn" onclick="toggleForgotPwVisibility('forgotConfirmPassword', this)" aria-label="Toggle password">
+                <i class="fa-regular fa-eye"></i>
+              </button>
+            </span>
+          </label>
+
+          <div style="margin-top:12px">
+            <div class="pw-meter" id="forgotPwMeterBar">
+              <div class="pw-meter-segment"></div><div class="pw-meter-segment"></div>
+              <div class="pw-meter-segment"></div><div class="pw-meter-segment"></div>
+            </div>
+            <p class="help">Password must be at least 8 characters. Use a combination of letters, numbers, and symbols.</p>
+          </div>
+
+          <p id="forgotStep4Error" class="notice-error hidden" style="margin-top:14px"></p>
+
+          <div style="margin-top:24px; display:flex; justify-content:flex-end; gap:10px">
+            <button type="submit" id="btnForgotSavePw" class="btn btn-primary btn-block btn-fancy" style="padding:13px 18px">
+              <span>Save New Password</span> <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- STEP 5: Success & Auto-Fill Sign In -->
+      <div id="forgotStep5" class="modal-body modal-center forgot-step-body hidden" style="padding:32px 20px">
+        <div class="modal-icon green fancy-icon-pulse"><i class="fa-solid fa-circle-check"></i></div>
+        <h3 style="margin-top:16px; font-size:24px; font-weight:800; color:var(--violet-deep)">Password Reset Complete!</h3>
+        <p class="muted" style="margin-top:8px; max-width:400px; margin-left:auto; margin-right:auto; line-height:1.6">
+          Your password has been successfully updated. You can now sign in using your new credentials.
+        </p>
+        <div style="margin-top:26px">
+          <button type="button" class="btn btn-primary btn-fancy" onclick="finishForgotPasswordAndSignIn()" style="padding:13px 36px">
+            <i class="fa-solid fa-right-to-bracket"></i> Sign in now
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- EMAILJS (MAILJS) CONFIGURATION MODAL                         -->
+  <!-- ============================================================ -->
+  <div id="modalEmailjsConfig" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="emailjsConfigTitle" style="z-index:9000">
+    <div class="modal-card" style="max-width:540px">
+      <div class="modal-head">
+        <div style="display:flex; align-items:center; gap:10px">
+          <div class="modal-mini-icon mail-icon"><i class="fa-solid fa-envelope-open-text"></i></div>
+          <h3 id="emailjsConfigTitle">MailJS (EmailJS) Settings</h3>
+        </div>
+        <button class="modal-x" onclick="closeEmailjsConfigModal()" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding:22px 24px">
+        <p class="muted small" style="margin-bottom:16px">
+          Configure your <strong>EmailJS</strong> keys to send live password recovery OTP emails. Sign up for free at <a href="https://www.emailjs.com/" target="_blank" rel="noopener" style="color:var(--violet);font-weight:700">emailjs.com</a>.
+        </p>
+
+        <form id="emailjsConfigForm" onsubmit="handleSaveEmailjsConfig(event)">
+          <label class="field">
+            <span class="label">Public Key (Account Public Key)</span>
+            <span class="input-wrap">
+              <i class="fa-solid fa-key lead-icon"></i>
+              <input type="text" id="cfgEmailjsPublicKey" class="input has-icon" placeholder="e.g. user_xxxxxxxxxxxxxx or public_key" />
+            </span>
+            <span class="help">Found in EmailJS Dashboard &rarr; Account &rarr; Public Key</span>
+          </label>
+
+          <label class="field" style="margin-top:14px">
+            <span class="label">Service ID</span>
+            <span class="input-wrap">
+              <i class="fa-solid fa-server lead-icon"></i>
+              <input type="text" id="cfgEmailjsServiceId" class="input has-icon" placeholder="e.g. service_gmail" />
+            </span>
+            <span class="help">Found in EmailJS Dashboard &rarr; Email Services</span>
+          </label>
+
+          <label class="field" style="margin-top:14px">
+            <span class="label">Template ID</span>
+            <span class="input-wrap">
+              <i class="fa-solid fa-file-code lead-icon"></i>
+              <input type="text" id="cfgEmailjsTemplateId" class="input has-icon" placeholder="e.g. template_otp_reset" />
+            </span>
+            <span class="help">In your template, include variables: <code>{{to_name}}</code>, <code>{{to_email}}</code>, <code>{{otp_code}}</code></span>
+          </label>
+
+          <!-- Crucial EmailJS Template Requirement Card -->
+          <div style="margin-top:14px; padding:12px 14px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; font-size:12.5px; color:#1e40af; line-height:1.5">
+            <strong style="color:#1d4ed8; display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:4px">
+              <i class="fa-solid fa-circle-exclamation"></i> Sending to other emails:
+            </strong>
+            In your <a href="https://dashboard.emailjs.com/admin/templates" target="_blank" rel="noopener" style="font-weight:700; text-decoration:underline; color:#1d4ed8">EmailJS Dashboard &rarr; Email Templates</a>, open your template and check the <strong>To Email</strong> field near the top.<br/>
+            Make sure it is set to: <code style="background:#dbeafe; color:#1e40af; padding:1px 6px; border-radius:4px; font-weight:700">{{to_email}}</code>.<br/>
+            <em>(If it is set to your personal email, EmailJS will only send OTPs to you instead of the other email you entered!)</em>
+          </div>
+
+          <!-- Test MailJS Sending -->
+          <div class="emailjs-test-box" style="margin-top:18px; padding:14px; background:var(--paper); border:1px solid var(--line); border-radius:12px">
+            <div style="font-size:13px; font-weight:700; color:var(--violet-deep); margin-bottom:6px">
+              <i class="fa-solid fa-flask"></i> Test Email Delivery
+            </div>
+            <div style="display:flex; gap:8px">
+              <input type="email" id="testEmailRecipient" class="input small" placeholder="Recipient email (e.g. your_email@gmail.com)" style="flex:1" />
+              <button type="button" class="btn btn-ghost btn-sm" onclick="sendTestEmailjs()">Send Test</button>
+            </div>
+            <div id="testEmailResult" class="small hidden" style="margin-top:8px"></div>
+          </div>
+
+          <div style="margin-top:20px; display:flex; justify-content:space-between; align-items:center">
+            <button type="button" class="btn btn-ghost" onclick="closeEmailjsConfigModal()">Close</button>
+            <button type="submit" class="btn btn-primary">Save Configuration</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- Password updated -->
+  <div id="modalPwUpdated" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h3>Password updated</h3></div>
+      <div class="modal-body modal-center">
+        <div class="modal-icon green"><i class="fa-solid fa-circle-check"></i></div>
+        <h4 style="margin-top:12px;font-size:18px;font-weight:700;color:var(--violet-deep)">Password updated successfully!</h4>
+        <p class="muted" style="margin-top:6px">Your password has been changed. Please sign in with your new password to continue.</p>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-primary btn-block" onclick="closePwUpdatedModal()">
+          <i class="fa-solid fa-right-to-bracket"></i> Sign in now
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New request -->
+  <div id="modalNewRequest" class="modal hidden">
+    <div class="modal-card wide">
+      <div class="modal-head"><h3>New document request</h3><button class="modal-x" onclick="closeNewRequestModal()" aria-label="Close">&times;</button></div>
+
+      <div class="modal-body">
+        <div>
+          <div class="field"><span class="label">1. Choose the documents you need</span></div>
+          <div class="doc-grid" id="docSelectionList"></div>
+        </div>
+
+        <label class="field">
+          <span class="label">2. Official Receipt (OR) number from the Treasury</span>
+          <input type="text" id="reqOrNumber" class="input mono" style="text-transform:uppercase" placeholder="e.g. OR-2026-50001" oninput="handleOrInput()" autocomplete="off" />
+          <p id="orHelp" class="help">Enter the number printed on the receipt you received after paying at the Treasury.</p>
+        </label>
+
+        <div>
+          <div class="field"><span class="label">3. Upload your Assessment Form</span></div>
+          <div class="dropzone" onclick="document.getElementById('fileAssessment').click()">
+            <div id="assessmentPhotoPreviewContainer" class="hidden"><img id="assessmentPhotoPreview" src="" alt="Assessment Form preview" /></div>
+            <i id="assessmentUploadIcon" class="fa-solid fa-file-invoice big"></i>
+            <p style="font-weight:700" id="fileAssessmentLabel">Choose a file (JPG, PNG or PDF)</p>
+            <p class="xs muted">The registrar uses this to verify your enrollment.</p>
+            <input type="file" id="fileAssessment" accept="image/*,.pdf" class="hidden" onchange="handleAssessmentFileSelected(this)" />
+          </div>
+        </div>
+
+        <div class="callout">
+          <b>Your request goes straight to the Registrar</b>
+          You'll get a tracking reference as soon as you submit.
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <button onclick="closeNewRequestModal()" class="btn btn-ghost">Cancel</button>
+        <button id="submitRequestBtn" onclick="submitNewRequest()" class="btn btn-primary">Submit request</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Request submitted -->
+  <div id="modalRequestSubmitted" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h3>Request submitted</h3><button class="modal-x" onclick="closeRequestSubmittedModal()" aria-label="Close">&times;</button></div>
+      <div class="modal-body modal-center">
+        <div class="modal-icon green"><i class="fa-solid fa-paper-plane"></i></div>
+        <p>Your request and Assessment Form were sent to the Registrar for review.</p>
+        <p class="mono muted small" id="submittedRefDisplay"></p>
+      </div>
+      <div class="modal-foot"><button class="btn btn-primary" onclick="closeRequestSubmittedModal()">Done</button></div>
+    </div>
+  </div>
+
+  <!-- Registrar review drawer -->
+  <div id="modalStaffReview" class="modal hidden">
+    <div class="modal-card wide">
+      <div class="modal-head"><h3 id="revModalHeader">Review request</h3><button class="modal-x" onclick="closeStaffReviewModal()" aria-label="Close">&times;</button></div>
+
+      <div class="modal-body">
+        <div class="review-top">
+          <div>
+            <div class="xs muted">Student</div>
+            <div style="font-weight:700;font-size:17px" id="revStudentName"></div>
+            <div class="xs muted mono" id="revStudentId"></div>
+          </div>
+          <div>
+            <div class="xs muted">Tracking reference</div>
+            <div class="mono" style="font-weight:700;font-size:16px;color:var(--violet)" id="revTrackingRef"></div>
+            <div class="xs muted" id="revDate"></div>
+          </div>
+        </div>
+
+        <div class="review-box">
+          <div class="rb-head"><span>Official Receipt</span><span id="revOrBadge" class="badge"></span></div>
+          <div class="xs muted">Entered OR number</div>
+          <div class="mono" style="font-weight:700;font-size:16px" id="revOrNumber"></div>
+        </div>
+
+        <div class="review-box">
+          <div class="rb-head"><span>Assessment Form</span></div>
+          <div id="revAssessmentContainer"></div>
+        </div>
+
+        <div id="revClearanceBox" class="review-box hidden">
+          <div class="rb-head"><span>Clearance Requirement</span></div>
+          <div id="revClearanceContainer"></div>
+        </div>
+
+        <div>
+          <div class="field"><span class="label">Requested documents</span></div>
+          <div id="revDocsList" style="display:grid;gap:8px"></div>
+        </div>
+
+        <div id="revClaimBox" class="hidden">
+          <div class="field"><span class="label">Claim date</span></div>
+          <div id="revClaimContent"></div>
+        </div>
+
+        <div id="revDeclineReasonBox" class="decline-note hidden" style="margin-top:0">
+          <b>Reason for declining</b>
+          <p id="revDeclineReasonText"></p>
+        </div>
+
+        <div>
+          <div class="field"><span class="label">Progress</span></div>
+          <ul class="tl" id="revTimeline"></ul>
+        </div>
+      </div>
+
+      <div class="modal-foot split">
+        <button id="revDeclineBtn" onclick="promptDeclineModal()" class="btn btn-danger-ghost"><i class="fa-solid fa-ban"></i> Decline request</button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap" id="revActionButtons"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pending Review: confirm released grades before processing starts -->
+  <div id="modalGradesNotice" class="modal hidden" style="z-index:70">
+    <div class="modal-card">
+      <div class="modal-body modal-center" style="padding-top:28px">
+        <div class="modal-icon gold"><i class="fa-solid fa-graduation-cap"></i></div>
+        <h3>Confirm released grades first</h3>
+        <p>Please refer to Wesleyan Automate for confirmation of released grades.</p>
+      </div>
+      <div class="modal-foot">
+        <button onclick="closeGradesNotice()" class="btn btn-ghost">Cancel</button>
+        <button onclick="confirmGradesNotice()" class="btn btn-primary">I've confirmed, begin processing</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ready to claim: pick (or change) the claim date -->
+  <div id="modalReady" class="modal hidden" style="z-index:70">
+    <div class="modal-card">
+      <div class="modal-head"><h3 id="readyTitle">Set the claim date</h3><button class="modal-x" onclick="closeReadyModal()" aria-label="Close">&times;</button></div>
+      <div class="modal-body">
+        <label class="field">
+          <span class="label">Date the student can claim the documents</span>
+          <input type="date" id="readyDate" class="input" />
+          <p class="help">The student sees this date on their dashboard. It can't be a past date.</p>
+        </label>
+        <p id="readyError" class="notice-error hidden"></p>
+      </div>
+      <div class="modal-foot">
+        <button onclick="closeReadyModal()" class="btn btn-ghost">Cancel</button>
+        <button id="readyConfirmBtn" onclick="confirmReadyModal()" class="btn btn-primary">Mark as ready to claim</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Decline reason -->
+  <div id="modalDecline" class="modal hidden" style="z-index:70">
+    <div class="modal-card">
+      <div class="modal-head"><h3>Reason for declining</h3><button class="modal-x" onclick="closeDeclinePrompt()" aria-label="Close">&times;</button></div>
+      <div class="modal-body">
+        <p class="muted small">The student sees this note on their dashboard, so write what they need to fix.</p>
+        <select id="declinePreset" onchange="applyDeclinePreset(this.value)" class="select">
+          <option value="">Choose a standard reason</option>
+          <option value="Official Receipt (OR) number not found or invalid in Treasury records.">Official Receipt (OR) not found in Treasury records</option>
+          <option value="Assessment Form / Certificate of Matriculation is unreadable or missing.">Assessment Form is unreadable or invalid</option>
+          <option value="Grades for the requested semester are not yet officially finalized.">Grades not yet officially finalized</option>
+          <option value="Student record has an existing accounting balance hold.">Accounting balance hold</option>
+        </select>
+        <textarea id="declineCustomText" rows="3" class="textarea" placeholder="Or write your own note for the student"></textarea>
+      </div>
+      <div class="modal-foot">
+        <button onclick="closeDeclinePrompt()" class="btn btn-ghost">Cancel</button>
+        <button onclick="confirmDecline()" class="btn btn-danger">Decline request</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / edit document -->
+  <div id="modalDocForm" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h3 id="docFormTitle">Add document</h3><button class="modal-x" onclick="closeDocForm()" aria-label="Close">&times;</button></div>
+      <div class="modal-body">
+        <label class="field">
+          <span class="label">Document name</span>
+          <input type="text" id="docName" class="input" maxlength="80" placeholder="e.g. Good Moral Certificate" />
+        </label>
+        <label class="field">
+          <span class="label">Description or requirements (optional)</span>
+          <textarea id="docDescription" rows="3" class="textarea" placeholder="Shown to students under the document name"></textarea>
+        </label>
+        <p id="docFormNote" class="help">A new document also gets a row in Clearance fees at 0.00, so you can set its price.</p>
+        <p id="docFormError" class="notice-error hidden"></p>
+      </div>
+      <div class="modal-foot">
+        <button onclick="closeDocForm()" class="btn btn-ghost">Cancel</button>
+        <button id="docFormSave" onclick="saveDocForm()" class="btn btn-primary">Add document</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add official receipt (staff only) -->
+  <div id="modalReceiptForm" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h3>Add Treasury Official Receipt</h3><button class="modal-x" onclick="closeReceiptForm()" aria-label="Close">&times;</button></div>
+      <div class="modal-body">
+        <label class="field">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span class="label" style="margin-bottom:0">Official Receipt (OR) Number</span>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="fetchNextOrForStaff()" style="padding:2px 8px;font-size:11.5px;height:auto">
+              <i class="fa-solid fa-arrows-rotate"></i> Auto-generate next
+            </button>
+          </div>
+          <input type="text" id="recOrNumber" class="input mono" placeholder="e.g. OR-2026-60001" style="text-transform:uppercase" />
+        </label>
+        <label class="field">
+          <span class="label">Student ID <span style="color:var(--bad)">*</span></span>
+          <input type="text" id="recStudentId" class="input mono" placeholder="e.g. WUP-24-1123-132" style="text-transform:uppercase" onblur="lookupStudentForReceipt(this.value)" autocomplete="off" />
+          <p id="recStudentHelp" class="help xs">Required. Enter the student's official university ID.</p>
+        </label>
+        <label class="field">
+          <span class="label">Payor / Student Name</span>
+          <input type="text" id="recStudentName" class="input" placeholder="e.g. Juan Dela Cruz" />
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label class="field">
+            <span class="label">Amount Paid (&#8369;)</span>
+            <input type="number" id="recAmount" class="input" min="0" step="0.01" placeholder="150.00" value="150" />
+          </label>
+          <label class="field">
+            <span class="label">Date Issued</span>
+            <input type="date" id="recDateIssued" class="input" />
+          </label>
+        </div>
+        <label class="field">
+          <span class="label">Particulars / Description</span>
+          <input type="text" id="recDescription" class="input" placeholder="e.g. Document Request Fee" value="Document Request Fee" />
+        </label>
+        <div id="receiptFormError" class="notice-error hidden"></div>
+      </div>
+      <div class="modal-foot">
+        <button onclick="closeReceiptForm()" class="btn btn-ghost">Cancel</button>
+        <button id="saveReceiptBtn" onclick="saveNewReceipt()" class="btn btn-primary">Save receipt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fancy Pop-up Dialog (replaces browser alert & confirm) -->
+  <div id="modalFancyDialog" class="modal hidden" role="alertdialog" aria-modal="true" aria-labelledby="fancyDialogTitle" aria-describedby="fancyDialogMessage" style="z-index: 9999">
+    <div class="modal-card fancy-dialog-card">
+      <button type="button" class="fancy-dialog-close" id="fancyDialogCloseBtn" aria-label="Close dialog" onclick="closeFancyDialog(false)">&times;</button>
+      <div class="modal-body modal-center" style="padding: 34px 28px 18px">
+        <div id="fancyDialogIcon" class="modal-icon gold fancy-icon-pulse">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <h3 id="fancyDialogTitle" style="margin-top: 18px; font-size: 20px; font-weight: 800; color: var(--violet-deep)">Attention</h3>
+        <p id="fancyDialogMessage" class="muted" style="margin-top: 10px; font-size: 14.5px; line-height: 1.6; word-break: break-word"></p>
+      </div>
+      <div class="modal-foot" id="fancyDialogFoot" style="padding: 16px 24px; justify-content: center; gap: 12px; background: #faf9fe">
+        <button id="fancyDialogCancelBtn" class="btn btn-ghost hidden" style="min-width: 110px">Cancel</button>
+        <button id="fancyDialogConfirmBtn" class="btn btn-primary" style="min-width: 110px">Got it</button>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- EmailJS Browser SDK (MailJS) -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script src="app.js?v=2.7_fancy"></script>
+</body>
+</html>
