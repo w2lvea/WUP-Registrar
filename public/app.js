@@ -3,9 +3,10 @@
 // ============================================================
 
 
-// The "refer to Wesleyan Automate" pop-up appears once, at the Pending Review step, for every request.
-// To limit it to certain documents, list their full names here, e.g. ['Certificate of Grades'].
-const GRADES_NOTICE_ONLY_FOR = null;
+// The "refer to Wesleyan Automate" pop-up appears once, at the Pending Review step.
+// Only applies to grade-bearing documents (Certificate of Grades, Transcript of Records).
+// Excludes Certificate of Enrollment (COE).
+const GRADES_NOTICE_ONLY_FOR = ['Certificate of Grades', 'Transcript of Records'];
 
 const OR_USED_MESSAGE = 'This OR number has already been used and cannot be used again.';
 
@@ -1917,11 +1918,16 @@ async function runStaffAction(path, body) {
   }
 }
 
-// Pending Review: the Wesleyan Automate reminder shows here, once, before processing begins.
+// Pending Review: the Wesleyan Automate reminder shows here, once, before processing begins (only for documents with grades).
 function openGradesNotice(ref) {
   const req = requestsData.find(r => r.ref === ref);
   if (!req) return;
-  const applies = !GRADES_NOTICE_ONLY_FOR || req.items.some(i => GRADES_NOTICE_ONLY_FOR.includes(i.name));
+  const isGradesDoc = (name) => {
+    const n = (name || '').toLowerCase();
+    if (n.includes('enrollment') || n === 'coe' || n === 'ceo') return false;
+    return n.includes('grade') || n.includes('transcript');
+  };
+  const applies = req.items.some(i => isGradesDoc(i.name));
   if (!applies) { runStaffAction(`/requests/${encodeURIComponent(ref)}/approve-payment`); return; }
   pendingGradesRef = ref;
   show('modalGradesNotice');
