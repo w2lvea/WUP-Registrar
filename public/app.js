@@ -214,10 +214,14 @@ async function loadReceipts() {
 }
 async function loadReference() {
   try {
-    await loadFees();
     if (currentUser && currentUser.role === 'staff') {
-      await loadDocuments();
-      await loadReceipts();
+      await Promise.all([
+        loadFees(),
+        loadDocuments(),
+        loadReceipts()
+      ]);
+    } else {
+      await loadFees();
     }
   } catch (e) { /* the tabs show an empty state; a 401 is handled in apiRequest */ }
 }
@@ -256,8 +260,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Restore the logged-in session (if any) so refreshing the page doesn't kick people to the login screen.
   try {
     currentUser = await apiRequest('GET', '/me');
-    await refreshRequestsData();
-    await loadReference();
+    await Promise.all([
+      refreshRequestsData(),
+      loadReference()
+    ]);
     if (currentUser.mustChangePassword) {
       openSetPasswordScreen(true);
       return;
@@ -330,8 +336,10 @@ async function handleUnifiedLogin(e) {
   try {
     currentView = 'requests';
     currentFilter = 'all';
-    await refreshRequestsData();
-    await loadReference();
+    await Promise.all([
+      refreshRequestsData(),
+      loadReference()
+    ]);
   } catch (err) { /* dashboards show an empty state */ }
 
   if (submitBtn) {
@@ -1732,11 +1740,21 @@ function openStaffReviewModal(ref) {
   else if (req.status === 'declined') { orBadge.innerText = 'Declined'; orBadge.className = 'badge declined'; }
   else { orBadge.innerText = 'Verified'; orBadge.className = 'badge ready'; }
 
-  document.getElementById('revAssessmentContainer').innerHTML = previewBlock(req.assessmentPhoto, req.ref, 'openAssessmentFullPreview');
+  // Attachment preview rendering
+  if (!req.assessmentPhoto && req.hasAssessmentPhoto) {
+    document.getElementById('revAssessmentContainer').innerHTML =
+      '<div class="small muted" style="padding:10px 0"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading attachment...</div>';
+  } else {
+    document.getElementById('revAssessmentContainer').innerHTML = previewBlock(req.assessmentPhoto, req.ref, 'openAssessmentFullPreview');
+  }
 
   if (req.clearancePhoto) {
     show('revClearanceBox');
     document.getElementById('revClearanceContainer').innerHTML = previewBlock(req.clearancePhoto, req.ref, 'openClearanceFullPreview');
+  } else if (!req.clearancePhoto && req.hasClearancePhoto) {
+    show('revClearanceBox');
+    document.getElementById('revClearanceContainer').innerHTML =
+      '<div class="small muted" style="padding:10px 0"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading attachment...</div>';
   } else {
     hide('revClearanceBox');
     document.getElementById('revClearanceContainer').innerHTML = '';
@@ -1781,6 +1799,27 @@ function openStaffReviewModal(ref) {
   }
 
   show('modalStaffReview');
+
+  // Asynchronously load attachments if not already loaded in memory
+  if ((!req.assessmentPhoto && req.hasAssessmentPhoto) || (!req.clearancePhoto && req.hasClearancePhoto)) {
+    apiRequest('GET', `/requests/lookup/${encodeURIComponent(ref)}`).then(full => {
+      if (!full) return;
+      req.assessmentPhoto = full.assessmentPhoto;
+      req.clearancePhoto = full.clearancePhoto;
+      if (currentActiveReviewRef === ref) {
+        document.getElementById('revAssessmentContainer').innerHTML = previewBlock(req.assessmentPhoto, req.ref, 'openAssessmentFullPreview');
+        if (req.clearancePhoto) {
+          show('revClearanceBox');
+          document.getElementById('revClearanceContainer').innerHTML = previewBlock(req.clearancePhoto, req.ref, 'openClearanceFullPreview');
+        } else {
+          hide('revClearanceBox');
+          document.getElementById('revClearanceContainer').innerHTML = '';
+        }
+      }
+    }).catch(e => {
+      console.warn('Failed to load request attachment:', e);
+    });
+  }
 }
 
 function closeStaffReviewModal() { hide('modalStaffReview'); }
@@ -1797,13 +1836,33 @@ function openFullPreview(photo, title, ref) {
     win.document.write(`<title>${title} - ${ref}</title><body style="font-family:sans-serif;padding:2rem;">No previewable file was attached for this request.</body>`);
   }
 }
-function openAssessmentFullPreview(ref) {
-  const req = requestsData.find(r => r.ref === ref);
-  if (req) openFullPreview(req.assessmentPhoto, 'Assessment Form', req.ref);
+async function openAssessmentFullPreview(ref) {
+  let req = requestsData.find(r => r.ref === ref);
+  if (!req) return;
+  if (!req.assessmentPhoto && req.hasAssessmentPhoto) {
+    try {
+      const full = await apiRequest('GET', `/requests/lookup/${encodeURIComponent(ref)}`);
+      if (full) {
+        req.assessmentPhoto = full.assessmentPhoto;
+        req.clearancePhoto = full.clearancePhoto;
+      }
+    } catch (e) {}
+  }
+  openFullPreview(req.assessmentPhoto, 'Assessment Form', req.ref);
 }
-function openClearanceFullPreview(ref) {
-  const req = requestsData.find(r => r.ref === ref);
-  if (req) openFullPreview(req.clearancePhoto, 'Clearance Requirement', req.ref);
+async function openClearanceFullPreview(ref) {
+  let req = requestsData.find(r => r.ref === ref);
+  if (!req) return;
+  if (!req.clearancePhoto && req.hasClearancePhoto) {
+    try {
+      const full = await apiRequest('GET', `/requests/lookup/${encodeURIComponent(ref)}`);
+      if (full) {
+        req.assessmentPhoto = full.assessmentPhoto;
+        req.clearancePhoto = full.clearancePhoto;
+      }
+    } catch (e) {}
+  }
+  openFullPreview(req.clearancePhoto, 'Clearance Requirement', req.ref);
 }
 
 // ----- status actions -----

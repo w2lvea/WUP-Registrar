@@ -260,6 +260,8 @@ async function getFullRequest(ref) {
     orDateIssued: receipt ? receipt.date_issued : '',
     assessmentPhoto: row.assessment_photo,
     clearancePhoto: row.clearance_photo || '',
+    hasAssessmentPhoto: Boolean(row.assessment_photo && row.assessment_photo.length > 0),
+    hasClearancePhoto: Boolean(row.clearance_photo && row.clearance_photo.length > 0),
     status: row.status,
     declineReason: row.rejection_reason,
     claimDate: row.claim_date || '',
@@ -269,14 +271,80 @@ async function getFullRequest(ref) {
 }
 
 async function getAllRequests({ studentId } = {}) {
-  const rows = studentId
-    ? await db.prepare('SELECT ref FROM requests WHERE student_id = ? ORDER BY rowid DESC').all(studentId)
-    : await db.prepare('SELECT ref FROM requests ORDER BY rowid DESC').all();
-  const results = [];
-  for (const r of rows) {
-    results.push(await getFullRequest(r.ref));
+  const reqSql = `
+    SELECT 
+      r.ref,
+      r.student_id,
+      COALESCE(s.name, r.student_id) AS student_name,
+      COALESCE(s.course, '') AS course,
+      r.or_number,
+      o.amount AS or_amount,
+      COALESCE(o.description, '') AS or_description,
+      COALESCE(o.date_issued, '') AS or_date_issued,
+      r.status,
+      COALESCE(r.rejection_reason, '') AS rejection_reason,
+      COALESCE(r.claim_date, '') AS claim_date,
+      r.date_submitted,
+      CASE WHEN r.assessment_photo IS NOT NULL AND length(r.assessment_photo) > 0 THEN 1 ELSE 0 END AS has_assessment_photo,
+      CASE WHEN r.clearance_photo IS NOT NULL AND length(r.clearance_photo) > 0 THEN 1 ELSE 0 END AS has_clearance_photo
+    FROM requests r
+    LEFT JOIN students s ON s.id = r.student_id
+    LEFT JOIN official_receipts o ON UPPER(o.or_number) = UPPER(r.or_number)
+    ${studentId ? 'WHERE r.student_id = ?' : ''}
+    ORDER BY r.date_submitted DESC, r.ref DESC
+  `;
+
+  const reqRows = studentId
+    ? await db.prepare(reqSql).all(studentId)
+    : await db.prepare(reqSql).all();
+
+  if (!reqRows || reqRows.length === 0) return [];
+
+  const itemsSql = studentId
+    ? 'SELECT ri.ref, ri.name, ri.copies FROM request_items ri JOIN requests r ON r.ref = ri.ref WHERE r.student_id = ?'
+    : 'SELECT ref, name, copies FROM request_items';
+
+  const timelineSql = studentId
+    ? 'SELECT rt.ref, rt.title, rt.time FROM request_timeline rt JOIN requests r ON r.ref = rt.ref WHERE r.student_id = ? ORDER BY rt.id ASC'
+    : 'SELECT ref, title, time FROM request_timeline ORDER BY id ASC';
+
+  const [itemsRows, timelineRows] = await Promise.all([
+    studentId ? db.prepare(itemsSql).all(studentId) : db.prepare(itemsSql).all(),
+    studentId ? db.prepare(timelineSql).all(studentId) : db.prepare(timelineSql).all()
+  ]);
+
+  const itemsByRef = {};
+  for (const item of (itemsRows || [])) {
+    if (!itemsByRef[item.ref]) itemsByRef[item.ref] = [];
+    itemsByRef[item.ref].push({ name: item.name, copies: item.copies });
   }
-  return results;
+
+  const timelineByRef = {};
+  for (const t of (timelineRows || [])) {
+    if (!timelineByRef[t.ref]) timelineByRef[t.ref] = [];
+    timelineByRef[t.ref].push({ title: t.title, time: t.time });
+  }
+
+  return reqRows.map(r => ({
+    ref: r.ref,
+    studentId: r.student_id,
+    studentName: r.student_name,
+    course: r.course,
+    items: itemsByRef[r.ref] || [],
+    orNumber: r.or_number,
+    orAmount: r.or_amount,
+    orDescription: r.or_description,
+    orDateIssued: r.or_date_issued,
+    assessmentPhoto: null,
+    clearancePhoto: '',
+    hasAssessmentPhoto: Boolean(r.has_assessment_photo),
+    hasClearancePhoto: Boolean(r.has_clearance_photo),
+    status: r.status,
+    declineReason: r.rejection_reason,
+    claimDate: r.claim_date,
+    dateSubmitted: r.date_submitted,
+    timeline: timelineByRef[r.ref] || []
+  }));
 }
 
 async function addTimelineAndStatus(ref, status, title) {
@@ -372,12 +440,15 @@ async function getSession(req) {
   if (!token) return null;
   const s = await db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
   if (!s) return null;
-  if (Number(s.expires_at) < Date.now()) {
+  const expiresAt = Number(s.expires_at);
+  if (expiresAt < Date.now()) {
     await db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
     return null;
   }
-  // sliding expiry: stays alive as long as the person keeps using the system
-  await db.prepare('UPDATE sessions SET expires_at = ? WHERE token = ?').run(Date.now() + SESSION_MS, token);
+  // sliding expiry: only update when less than 11 hours remain so we don't write to DB on every GET request
+  if (expiresAt - Date.now() < 11 * 60 * 60 * 1000) {
+    db.prepare('UPDATE sessions SET expires_at = ? WHERE token = ?').run(Date.now() + SESSION_MS, token).catch(() => {});
+  }
   return s;
 }
 
