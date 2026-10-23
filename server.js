@@ -1386,6 +1386,20 @@ app.get('/api/_debug/data', async (req, res) => {
   });
 });
 
+// Serve index.html for frontend navigation routes
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) return next();
+  const filePath = path.join(__dirname, 'public', req.path === '/' ? 'index.html' : req.path);
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+  next();
+});
+
 const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   app.listen(PORT, () => {

@@ -91,6 +91,26 @@ if (DATABASE_URL) {
       await pool.query(sql);
     }
   };
+} else if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  // Running in Vercel serverless environment but DATABASE_URL was not set!
+  console.error('[CRITICAL] DATABASE_URL is not set in Vercel Environment Variables!');
+  console.error('[CRITICAL] Please go to Vercel Dashboard -> Project Settings -> Environment Variables, add DATABASE_URL, and redeploy.');
+  db = {
+    isPostgres: false,
+    prepare() {
+      return {
+        async get() { return null; },
+        async all() { return []; },
+        async run() {
+          throw new Error('DATABASE_URL is not configured in Vercel Environment Variables. Please set DATABASE_URL in Vercel Project Settings and redeploy.');
+        }
+      };
+    },
+    async query() { return []; },
+    async exec() {
+      throw new Error('DATABASE_URL is not configured in Vercel Environment Variables.');
+    }
+  };
 } else {
   // =============================================================
   // SQLite Local Fallback Mode (node:sqlite)
