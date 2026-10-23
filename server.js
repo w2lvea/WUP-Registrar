@@ -197,11 +197,12 @@ const app = express();
 app.set('trust proxy', 1); // Render/Vercel sits behind a proxy; needed so the Secure cookie flag works over https
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
-app.use((req, res, next) => {
+// Disable caching for dynamic API responses to guarantee real-time updates
+app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   next();
 });
-app.use(express.static(path.join(__dirname, 'public'), { etag: false, maxAge: 0 }));
+app.use(express.static(path.join(__dirname, 'public'), { etag: true, maxAge: 0 }));
 
 // Health / Database Status check endpoint
 app.get('/api/db-status', async (req, res) => {
@@ -248,17 +249,19 @@ async function getFullRequest(ref) {
   const row = await db.prepare('SELECT * FROM requests WHERE ref = ?').get(ref);
   if (!row) return null;
 
-  const student = await db.prepare('SELECT name, course FROM students WHERE id = ?').get(row.student_id);
-  const items = await db.prepare('SELECT name, copies FROM request_items WHERE ref = ?').all(ref);
-  const timeline = await db.prepare('SELECT title, time FROM request_timeline WHERE ref = ? ORDER BY id ASC').all(ref);
-  const receipt = row.or_number ? await db.prepare('SELECT amount, description, date_issued FROM official_receipts WHERE UPPER(or_number) = ?').get(normalizeOr(row.or_number)) : null;
+  const [student, items, timeline, receipt] = await Promise.all([
+    db.prepare('SELECT name, course FROM students WHERE id = ?').get(row.student_id),
+    db.prepare('SELECT name, copies FROM request_items WHERE ref = ?').all(ref),
+    db.prepare('SELECT title, time FROM request_timeline WHERE ref = ? ORDER BY id ASC').all(ref),
+    row.or_number ? db.prepare('SELECT amount, description, date_issued FROM official_receipts WHERE UPPER(or_number) = ?').get(normalizeOr(row.or_number)) : Promise.resolve(null)
+  ]);
 
   return {
     ref: row.ref,
     studentId: row.student_id,
     studentName: student ? student.name : row.student_id,
     course: student ? student.course : '',
-    items,
+    items: items || [],
     orNumber: row.or_number,
     orAmount: receipt ? receipt.amount : null,
     orDescription: receipt ? receipt.description : '',
@@ -1129,18 +1132,21 @@ app.post('/api/requests', requireLogin, async (req, res) => {
 
   const orClean = normalizeOr(orNumber);
 
-  const receipt = await findOfficialReceipt(orClean);
+  const [receipt, isUsed, student] = await Promise.all([
+    findOfficialReceipt(orClean),
+    isOrUsed(orClean),
+    db.prepare('SELECT id FROM students WHERE id = ?').get(studentId)
+  ]);
+
   if (!receipt) {
     return res.status(400).json({ error: 'Invalid Official Receipt (OR) number. Receipt not found in Treasury records.' });
   }
   if (!receipt.student_id || receipt.student_id.toUpperCase() !== studentId.toUpperCase()) {
     return res.status(400).json({ error: `This OR number was not issued to student ${studentId}.` });
   }
-  if (await isOrUsed(orClean)) {
+  if (isUsed) {
     return res.status(409).json({ error: OR_USED_MESSAGE });
   }
-
-  const student = await db.prepare('SELECT id FROM students WHERE id = ?').get(studentId);
   if (!student) return res.status(404).json({ error: 'Student not found.' });
 
   const ref = await nextRef();
@@ -1528,6 +1534,13 @@ app.get('*', (req, res, next) => {
     return res.sendFile(indexPath);
   }
   next();
+});
+
+// Global error handling middleware - ensure clean JSON errors
+app.use((err, req, res, next) => {
+  console.error('[API Error]', err);
+  if (res.headersSent) return next(err);
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
 const PORT = process.env.PORT || 3000;

@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS requests (
   date_submitted   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_requests_student ON requests(student_id);
+CREATE INDEX IF NOT EXISTS idx_requests_or ON requests(or_number);
+CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status);
 
 -- 7. Request Items Table
 CREATE TABLE IF NOT EXISTS request_items (
@@ -102,6 +104,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_id    TEXT NOT NULL,
   expires_at BIGINT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 
 -- 10. Password Reset OTPs Table
 CREATE TABLE IF NOT EXISTS password_reset_otps (

@@ -175,8 +175,11 @@ if (DATABASE_URL) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_requests_student ON requests(student_id);
+    CREATE INDEX IF NOT EXISTS idx_requests_or ON requests(or_number);
+    CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status);
     CREATE INDEX IF NOT EXISTS idx_items_ref ON request_items(ref);
     CREATE INDEX IF NOT EXISTS idx_timeline_ref ON request_timeline(ref);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
   `);
 
   function hasColumn(table, col) {

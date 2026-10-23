@@ -1,6 +1,4 @@
-/* WUP Registrar — design tokens come from the university seal: violet and gold.
-   Violet carries structure, gold marks the one thing to look at (the claim date). */
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap');
+/* WUP Registrar — design tokens come from the university seal: violet and gold. */
 
 :root {
   --violet: #351b84;
@@ -224,30 +222,6 @@ img { max-width: 100%; }
 .tracker.is-declined .step.done::before, .tracker.is-declined .step.done::after { background: var(--line-strong); border-color: var(--line-strong); }
 .decline-note { margin-top: 8px; padding: 9px 12px; background: var(--bad-bg); color: var(--bad); border-radius: 10px; font-size: 13.5px; font-weight: 600; }
 
-/* The claim date: the one gold object in the system. */
-.claim {
-  display: flex; align-items: center; gap: 14px; margin: 0 20px 18px; padding: 12px 16px;
-  background: var(--violet-soft); border-radius: 14px;
-}
-.claim > i { width: 36px; height: 36px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; background: var(--gold); color: var(--gold-ink); font-size: 16px; }
-.cal {
-  width: 76px; flex-shrink: 0; text-align: center; background: #fff; border-radius: 12px; overflow: hidden;
-  box-shadow: 0 0 0 2px var(--gold), 0 6px 14px rgba(53, 27, 132, .14);
-}
-.cal .mon { background: var(--gold); color: var(--gold-ink); font-weight: 800; font-size: 13px; padding: 3px 0; letter-spacing: .04em; }
-.cal .day { font-family: var(--font-head); font-weight: 800; font-size: 34px; line-height: 1.05; color: var(--violet); padding-top: 4px; }
-.cal .dow { font-size: 12px; font-weight: 700; color: var(--muted); padding-bottom: 6px; }
-.kv .claim { margin: 10px 0 0; padding: 10px 12px; gap: 10px; border-radius: 12px; }
-.kv .claim > i { width: 30px; height: 30px; font-size: 13px; }
-.kv .claim .txt .big { font-size: 14.5px; line-height: 1.25; }
-.kv .claim .txt .sub { font-size: 12.5px; }
-.claim .txt .big { font-family: var(--font-head); font-weight: 800; font-size: 17px; color: var(--violet-deep); }
-.claim .txt .sub { color: var(--muted); font-size: 13.5px; margin-top: 2px; }
-.cal.mini { width: 54px; box-shadow: 0 0 0 2px var(--gold); }
-.cal.mini .mon { font-size: 11px; padding: 1px 0; }
-.cal.mini .day { font-size: 22px; padding-top: 2px; }
-.cal.mini .dow { font-size: 10.5px; padding-bottom: 3px; }
-
 .empty { text-align: center; padding: 48px 20px; color: var(--muted); }
 .empty i { font-size: 30px; color: #b9b2d9; display: block; margin-bottom: 10px; }
 .empty .t { font-weight: 700; color: var(--text); margin-bottom: 4px; }
@@ -346,7 +320,6 @@ ul.tl { display: grid; gap: 10px; border-left: 2px solid var(--line); margin: 0 
   .main { padding: 16px 14px 40px; }
   .page-head h2 { font-size: 22px; }
   .req-body { grid-template-columns: 1fr; gap: 14px; }
-  .claim { margin: 0 14px 16px; gap: 14px; }
   .req-head, .req-body { padding-left: 14px; padding-right: 14px; }
   .req-foot { padding: 0 14px 16px; }
   .stats { grid-template-columns: repeat(2, 1fr); }

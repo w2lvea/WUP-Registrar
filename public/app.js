@@ -1406,7 +1406,7 @@ function filterList(list) {
 }
 
 // ============================================================
-// STATUS BADGE + CLAIM DATE
+// STATUS BADGES
 // ============================================================
 function getStatusBadge(st) {
   switch (st) {
@@ -1685,11 +1685,15 @@ function closeRequestSubmittedModal() { hide('modalRequestSubmitted'); }
 // STAFF: REQUEST QUEUE
 // ============================================================
 function renderStaffDashboard() {
-  const n = (st) => requestsData.filter(r => r.status === st).length;
-  document.getElementById('metricPending').innerText = n('pending_verification');
-  document.getElementById('metricProcessing').innerText = n('processing');
-  document.getElementById('metricReady').innerText = n('ready');
-  document.getElementById('metricDeclined').innerText = n('declined');
+  const counts = { pending_verification: 0, processing: 0, ready: 0, declined: 0 };
+  for (let i = 0; i < requestsData.length; i++) {
+    const st = requestsData[i].status;
+    if (counts[st] !== undefined) counts[st]++;
+  }
+  document.getElementById('metricPending').innerText = counts.pending_verification;
+  document.getElementById('metricProcessing').innerText = counts.processing;
+  document.getElementById('metricReady').innerText = counts.ready;
+  document.getElementById('metricDeclined').innerText = counts.declined;
 
   let list = filterList(requestsData);
   const search = (document.getElementById('staffSearchInput').value || '').trim().toLowerCase();
