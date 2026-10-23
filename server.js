@@ -1124,8 +1124,8 @@ app.post('/api/requests', requireLogin, async (req, res) => {
   if (!receipt) {
     return res.status(400).json({ error: 'Invalid Official Receipt (OR) number. Receipt not found in Treasury records.' });
   }
-  if (receipt.student_id && receipt.student_id.toUpperCase() !== studentId.toUpperCase()) {
-    return res.status(400).json({ error: `This OR number was issued to student ${receipt.student_id}.` });
+  if (!receipt.student_id || receipt.student_id.toUpperCase() !== studentId.toUpperCase()) {
+    return res.status(400).json({ error: `This OR number was not issued to student ${studentId}.` });
   }
   if (await isOrUsed(orClean)) {
     return res.status(409).json({ error: OR_USED_MESSAGE });
@@ -1240,12 +1240,21 @@ app.get('/api/or-check', requireLogin, async (req, res) => {
   }
 
   const studentId = req.session.role === 'student' ? req.session.user_id : null;
-  if (studentId && receipt.student_id && receipt.student_id.toUpperCase() !== studentId.toUpperCase()) {
-    return res.json({
-      valid: false,
-      used: false,
-      error: `This OR number was issued to student ${receipt.student_id}.`
-    });
+  if (studentId) {
+    if (!receipt.student_id) {
+      return res.json({
+        valid: false,
+        used: false,
+        error: 'This OR number is not registered to a student ID in Treasury records.'
+      });
+    }
+    if (receipt.student_id.toUpperCase() !== studentId.toUpperCase()) {
+      return res.json({
+        valid: false,
+        used: false,
+        error: `This OR number was issued to student ${receipt.student_id}.`
+      });
+    }
   }
 
   if (await isOrUsed(or)) {
@@ -1306,15 +1315,15 @@ app.get('/api/receipts/next-or', requireStaff, async (req, res) => {
 
 app.post('/api/receipts/generate', requireStaff, async (req, res) => {
   const targetStudentId = String(req.body.studentId || '').trim().toUpperCase();
+  if (!targetStudentId) {
+    return res.status(400).json({ error: 'Student ID is required to generate an Official Receipt.' });
+  }
 
-  let targetStudentName = '';
-  if (targetStudentId) {
-    const stu = await db.prepare('SELECT name FROM students WHERE id = ?').get(targetStudentId);
-    if (stu) targetStudentName = stu.name;
+  const stu = await db.prepare('SELECT id, name FROM students WHERE id = ?').get(targetStudentId);
+  if (!stu) {
+    return res.status(404).json({ error: `Student with ID "${targetStudentId}" not found in records.` });
   }
-  if (!targetStudentName && req.body.studentName) {
-    targetStudentName = String(req.body.studentName).trim();
-  }
+  const targetStudentName = stu.name;
 
   const orNumber = await nextOrNumber();
   const amount = Number(req.body.amount) || 150;

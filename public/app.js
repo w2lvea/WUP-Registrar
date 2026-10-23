@@ -2195,7 +2195,7 @@ function renderReceipts() {
   body.innerHTML = filtered.map(r => {
     const studentInfo = r.studentId
       ? `<div><b>${esc(r.studentName || r.studentId)}</b><div class="small muted mono">${esc(r.studentId)}</div></div>`
-      : '<span class="small muted">Open / Any Student</span>';
+      : '<span class="small muted mono">—</span>';
 
     let statusBadge = '<span class="badge ready"><i class="fa-solid fa-circle-check"></i>Available</span>';
     if (r.isUsed) {
