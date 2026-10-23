@@ -25,11 +25,36 @@ Visit `http://localhost:3000`. A `data/wup_registrar.db` file is created and see
 automatically on first run (4 demo students + 1 registrar staff account — see `db.js`
 for the seeded credentials).
 
-## Deploy — GitHub + Render (free)
+## Deploy on Vercel + Supabase (Recommended for Serverless)
 
-Render runs this app as a normal, always-on Node process (unlike Vercel's serverless
-functions), so the SQLite file works exactly like it does locally — **no code changes
-needed.**
+The application includes a dual-mode database adapter (`db.js`) and Vercel serverless function entrypoint (`api/index.js`), allowing it to run smoothly on Vercel using Supabase (PostgreSQL) for persistent storage.
+
+### 1. Set Up Supabase Database
+1. Go to [supabase.com](https://supabase.com) and create or open your project.
+2. In the **SQL Editor**, run [supabase_schema.sql](supabase_schema.sql) to create all tables and initial records.
+3. Obtain your Database Connection URL:
+   - Go to **Project Settings** → **Database** → **Connection String** → **URI**.
+   - Select **Mode: Transaction** (port 6543) for serverless compatibility.
+
+### 2. Deploy to Vercel
+1. Push your latest code to GitHub:
+   ```bash
+   git add .
+   git commit -m "Adapt project for Vercel + Supabase"
+   git push origin main
+   ```
+2. Go to [vercel.com](https://vercel.com) → **Add New...** → **Project**.
+3. Import your `WUP-Registrar` GitHub repository.
+4. Under **Environment Variables**, add:
+   - `DATABASE_URL`: `postgresql://postgres.[REF]:[PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres`
+   - `SUPABASE_URL`: `https://[REF].supabase.co`
+   - `SUPABASE_KEY`: Your Supabase API key
+   - (Optional) `EMAILJS_*` and `SEMAPHORE_*` keys if using OTP email/SMS delivery.
+5. Click **Deploy**. Vercel will build and host your app!
+
+---
+
+## Deploy — GitHub + Render (Alternative)
 
 ### 1. Push to GitHub
 

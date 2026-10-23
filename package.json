@@ -4,7 +4,7 @@
   "description": "WUP Online Student Document Request and Tracking System — Express + SQLite backend",
   "main": "server.js",
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
     "start": "node server.js",

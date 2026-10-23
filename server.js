@@ -177,7 +177,6 @@ async function dispatchSmsOtp(phone, otpCode) {
   }
 }
 
-
 function maskEmail(email) {
   if (!email || !email.includes('@')) return '';
   const [user, domain] = email.split('@');
@@ -195,7 +194,7 @@ function maskPhone(phone) {
 }
 
 const app = express();
-app.set('trust proxy', 1); // Render sits behind a proxy; needed so the Secure cookie flag works over https
+app.set('trust proxy', 1); // Render/Vercel sits behind a proxy; needed so the Secure cookie flag works over https
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use((req, res, next) => {
@@ -210,14 +209,14 @@ function nowTime() {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function getFullRequest(ref) {
-  const row = db.prepare('SELECT * FROM requests WHERE ref = ?').get(ref);
+async function getFullRequest(ref) {
+  const row = await db.prepare('SELECT * FROM requests WHERE ref = ?').get(ref);
   if (!row) return null;
 
-  const student = db.prepare('SELECT name, course FROM students WHERE id = ?').get(row.student_id);
-  const items = db.prepare('SELECT name, copies FROM request_items WHERE ref = ?').all(ref);
-  const timeline = db.prepare('SELECT title, time FROM request_timeline WHERE ref = ? ORDER BY id ASC').all(ref);
-  const receipt = row.or_number ? db.prepare('SELECT amount, description, date_issued FROM official_receipts WHERE UPPER(or_number) = ?').get(normalizeOr(row.or_number)) : null;
+  const student = await db.prepare('SELECT name, course FROM students WHERE id = ?').get(row.student_id);
+  const items = await db.prepare('SELECT name, copies FROM request_items WHERE ref = ?').all(ref);
+  const timeline = await db.prepare('SELECT title, time FROM request_timeline WHERE ref = ? ORDER BY id ASC').all(ref);
+  const receipt = row.or_number ? await db.prepare('SELECT amount, description, date_issued FROM official_receipts WHERE UPPER(or_number) = ?').get(normalizeOr(row.or_number)) : null;
 
   return {
     ref: row.ref,
@@ -239,29 +238,34 @@ function getFullRequest(ref) {
   };
 }
 
-function getAllRequests({ studentId } = {}) {
+async function getAllRequests({ studentId } = {}) {
   const rows = studentId
-    ? db.prepare('SELECT ref FROM requests WHERE student_id = ? ORDER BY rowid DESC').all(studentId)
-    : db.prepare('SELECT ref FROM requests ORDER BY rowid DESC').all();
-  return rows.map(r => getFullRequest(r.ref));
+    ? await db.prepare('SELECT ref FROM requests WHERE student_id = ? ORDER BY rowid DESC').all(studentId)
+    : await db.prepare('SELECT ref FROM requests ORDER BY rowid DESC').all();
+  const results = [];
+  for (const r of rows) {
+    results.push(await getFullRequest(r.ref));
+  }
+  return results;
 }
 
-function addTimelineAndStatus(ref, status, title) {
-  db.prepare('UPDATE requests SET status = ? WHERE ref = ?').run(status, ref);
-  db.prepare('INSERT INTO request_timeline (ref, title, time) VALUES (?, ?, ?)').run(ref, title, nowTime());
+async function addTimelineAndStatus(ref, status, title) {
+  await db.prepare('UPDATE requests SET status = ? WHERE ref = ?').run(status, ref);
+  await db.prepare('INSERT INTO request_timeline (ref, title, time) VALUES (?, ?, ?)').run(ref, title, nowTime());
 }
 
-function nextRef() {
+async function nextRef() {
   const year = new Date().getFullYear();
   const prefix = `DOC-${year}-`;
-  const count = db.prepare('SELECT COUNT(*) AS c FROM requests WHERE ref LIKE ?').get(prefix + '%').c;
+  const res = await db.prepare('SELECT COUNT(*) AS c FROM requests WHERE ref LIKE ?').get(prefix + '%');
+  const count = Number(res?.c || 0);
   return `${prefix}${1000 + count + 1}`;
 }
 
-function nextOrNumber() {
+async function nextOrNumber() {
   const year = new Date().getFullYear();
   const prefix = `OR-${year}-`;
-  const rows = db.prepare("SELECT or_number FROM official_receipts WHERE UPPER(or_number) LIKE ?").all(`${prefix}%`);
+  const rows = await db.prepare("SELECT or_number FROM official_receipts WHERE UPPER(or_number) LIKE ?").all(`${prefix}%`);
   let maxNum = 50000;
   for (const r of rows) {
     const parts = r.or_number.split('-');
@@ -273,7 +277,7 @@ function nextOrNumber() {
     }
   }
   let candidate = `${prefix}${maxNum + 1}`;
-  while (findOfficialReceipt(candidate)) {
+  while (await findOfficialReceipt(candidate)) {
     maxNum++;
     candidate = `${prefix}${maxNum + 1}`;
   }
@@ -284,14 +288,15 @@ function normalizeOr(value) {
   return String(value || '').trim().toUpperCase();
 }
 
-function findOfficialReceipt(orNumber) {
-  return db.prepare('SELECT * FROM official_receipts WHERE UPPER(or_number) = ?').get(normalizeOr(orNumber));
+async function findOfficialReceipt(orNumber) {
+  return await db.prepare('SELECT * FROM official_receipts WHERE UPPER(or_number) = ?').get(normalizeOr(orNumber));
 }
 
 // An OR number is "used" if any request that is not declined already carries it.
 const OR_USED_MESSAGE = 'This OR number has already been used and cannot be used again.';
-function isOrUsed(orNumber) {
-  return !!db.prepare("SELECT 1 FROM requests WHERE UPPER(or_number) = ? AND status != 'declined'").get(normalizeOr(orNumber));
+async function isOrUsed(orNumber) {
+  const row = await db.prepare("SELECT 1 FROM requests WHERE UPPER(or_number) = ? AND status != 'declined'").get(normalizeOr(orNumber));
+  return !!row;
 }
 
 // Today's date in the Philippines (YYYY-MM-DD), used to stop claim dates in the past.
@@ -306,9 +311,7 @@ function prettyDate(str) {
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-
 // ---------- sessions (keeps people logged in across page refreshes) ----------
-// A random token is stored in an httpOnly cookie and in the SQLite `sessions` table.
 const SESSION_COOKIE = 'wup_sid';
 const SESSION_MS = 12 * 60 * 60 * 1000; // 12 hours — covers a full 8am-5pm registrar shift
 
@@ -327,44 +330,53 @@ function setSessionCookie(req, res, token, maxAgeMs) {
   res.setHeader('Set-Cookie', flags.join('; '));
 }
 
-function createSession(req, res, role, userId) {
+async function createSession(req, res, role, userId) {
   const token = crypto.randomBytes(32).toString('hex');
-  db.prepare('INSERT INTO sessions (token, role, user_id, expires_at) VALUES (?, ?, ?, ?)')
+  await db.prepare('INSERT INTO sessions (token, role, user_id, expires_at) VALUES (?, ?, ?, ?)')
     .run(token, role, userId, Date.now() + SESSION_MS);
   setSessionCookie(req, res, token, SESSION_MS);
 }
 
-function getSession(req) {
+async function getSession(req) {
   const token = parseCookies(req)[SESSION_COOKIE];
   if (!token) return null;
-  const s = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
+  const s = await db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
   if (!s) return null;
-  if (s.expires_at < Date.now()) {
-    db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+  if (Number(s.expires_at) < Date.now()) {
+    await db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
     return null;
   }
   // sliding expiry: stays alive as long as the person keeps using the system
-  db.prepare('UPDATE sessions SET expires_at = ? WHERE token = ?').run(Date.now() + SESSION_MS, token);
+  await db.prepare('UPDATE sessions SET expires_at = ? WHERE token = ?').run(Date.now() + SESSION_MS, token);
   return s;
 }
 
-function requireLogin(req, res, next) {
-  const s = getSession(req);
-  if (!s) return res.status(401).json({ error: 'Not logged in.' });
-  req.session = s;
-  next();
-}
-
-function requireStaff(req, res, next) {
-  requireLogin(req, res, () => {
-    if (req.session.role !== 'staff') return res.status(403).json({ error: 'Registrar staff only.' });
+async function requireLogin(req, res, next) {
+  try {
+    const s = await getSession(req);
+    if (!s) return res.status(401).json({ error: 'Not logged in.' });
+    req.session = s;
     next();
-  });
+  } catch (err) {
+    next(err);
+  }
 }
 
-function buildUser(role, id) {
+async function requireStaff(req, res, next) {
+  try {
+    const s = await getSession(req);
+    if (!s) return res.status(401).json({ error: 'Not logged in.' });
+    if (s.role !== 'staff') return res.status(403).json({ error: 'Registrar staff only.' });
+    req.session = s;
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function buildUser(role, id) {
   if (role === 'staff') {
-    const st = db.prepare('SELECT * FROM staff WHERE username = ?').get(id);
+    const st = await db.prepare('SELECT * FROM staff WHERE username = ?').get(id);
     return st && {
       role: 'staff',
       id: st.username,
@@ -376,7 +388,7 @@ function buildUser(role, id) {
       mustChangePassword: !!st.must_change_password
     };
   }
-  const stu = db.prepare('SELECT * FROM students WHERE id = ?').get(id);
+  const stu = await db.prepare('SELECT * FROM students WHERE id = ?').get(id);
   return stu && {
     role: 'student',
     id: stu.id,
@@ -390,16 +402,16 @@ function buildUser(role, id) {
 }
 
 // clean out expired sessions and old OTPs once an hour
-setInterval(() => {
+setInterval(async () => {
   try {
-    db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
-    db.prepare('DELETE FROM password_reset_otps WHERE expires_at < ?').run(Date.now() - 24 * 60 * 60 * 1000);
+    await db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
+    await db.prepare('DELETE FROM password_reset_otps WHERE expires_at < ?').run(Date.now() - 24 * 60 * 60 * 1000);
   } catch (e) {}
 }, 60 * 60 * 1000).unref();
 
 // ---------- auth ----------
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const username = (req.body.username || '').trim();
   const password = (req.body.password || '').trim();
 
@@ -407,9 +419,9 @@ app.post('/api/login', (req, res) => {
     return res.status(400).json({ error: 'Username and password are required.' });
   }
 
-  const staff = db.prepare('SELECT * FROM staff WHERE username = ?').get(username.toLowerCase());
+  const staff = await db.prepare('SELECT * FROM staff WHERE username = ?').get(username.toLowerCase());
   if (staff && verifyPassword(password, staff.password_hash)) {
-    createSession(req, res, 'staff', staff.username);
+    await createSession(req, res, 'staff', staff.username);
     return res.json({
       role: 'staff',
       id: staff.username,
@@ -421,9 +433,9 @@ app.post('/api/login', (req, res) => {
     });
   }
 
-  const student = db.prepare("SELECT * FROM students WHERE id = ? OR (username != '' AND LOWER(username) = LOWER(?))").get(username.toUpperCase(), username);
+  const student = await db.prepare("SELECT * FROM students WHERE id = ? OR (username != '' AND LOWER(username) = LOWER(?))").get(username.toUpperCase(), username);
   if (student && verifyPassword(password, student.password_hash)) {
-    createSession(req, res, 'student', student.id);
+    await createSession(req, res, 'student', student.id);
     return res.json({
       role: 'student',
       id: student.id,
@@ -440,24 +452,24 @@ app.post('/api/login', (req, res) => {
 });
 
 // Who is logged in right now? The page calls this on load so a refresh doesn't log people out.
-app.get('/api/me', (req, res) => {
-  const s = getSession(req);
-  const user = s && buildUser(s.role, s.user_id);
+app.get('/api/me', async (req, res) => {
+  const s = await getSession(req);
+  const user = s && (await buildUser(s.role, s.user_id));
   if (!user) return res.status(401).json({ error: 'Not logged in.' });
   res.json(user);
 });
 
-app.post('/api/logout', (req, res) => {
+app.post('/api/logout', async (req, res) => {
   const token = parseCookies(req)[SESSION_COOKIE];
-  if (token) db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+  if (token) await db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
   setSessionCookie(req, res, '', 0);
   res.json({ success: true });
 });
 
 // Change password — requires the current password (used from an already-logged-in session).
-app.post('/api/change-password', requireLogin, (req, res) => {
+app.post('/api/change-password', requireLogin, async (req, res) => {
   const { currentPassword, newPassword, email } = req.body;
-  const id = req.session.user_id;     // always the logged-in account, never a value from the browser
+  const id = req.session.user_id;
   const role = req.session.role;
 
   if (!id || !role || !currentPassword || !newPassword) {
@@ -479,7 +491,7 @@ app.post('/api/change-password', requireLogin, (req, res) => {
   const keyCol = role === 'staff' ? 'username' : 'id';
   const lookupId = role === 'staff' ? String(id).toLowerCase() : String(id).toUpperCase();
 
-  const row = db.prepare(`SELECT * FROM ${table} WHERE ${keyCol} = ?`).get(lookupId);
+  const row = await db.prepare(`SELECT * FROM ${table} WHERE ${keyCol} = ?`).get(lookupId);
   if (!row) return res.status(404).json({ error: 'Account not found.' });
 
   if (!verifyPassword(currentPassword, row.password_hash)) {
@@ -487,30 +499,27 @@ app.post('/api/change-password', requireLogin, (req, res) => {
   }
 
   if (role === 'staff') {
-    // Changing the password also clears the forced first-login flag for staff.
     if (cleanEmail) {
-      db.prepare('UPDATE staff SET password_hash = ?, email = ?, must_change_password = 0 WHERE username = ?')
+      await db.prepare('UPDATE staff SET password_hash = ?, email = ?, must_change_password = 0 WHERE username = ?')
         .run(hashPassword(newPassword), cleanEmail, lookupId);
     } else {
-      db.prepare('UPDATE staff SET password_hash = ?, must_change_password = 0 WHERE username = ?')
+      await db.prepare('UPDATE staff SET password_hash = ?, must_change_password = 0 WHERE username = ?')
         .run(hashPassword(newPassword), lookupId);
     }
   } else {
-    // Changing the password also clears the forced first-login flag for students.
     if (cleanEmail) {
-      db.prepare('UPDATE students SET password_hash = ?, email = ?, must_change_password = 0 WHERE id = ?')
+      await db.prepare('UPDATE students SET password_hash = ?, email = ?, must_change_password = 0 WHERE id = ?')
         .run(hashPassword(newPassword), cleanEmail, lookupId);
     } else {
-      db.prepare('UPDATE students SET password_hash = ?, must_change_password = 0 WHERE id = ?')
+      await db.prepare('UPDATE students SET password_hash = ?, must_change_password = 0 WHERE id = ?')
         .run(hashPassword(newPassword), lookupId);
     }
   }
   res.json({ success: true, email: cleanEmail || row.email || '' });
 });
 
-// Change username — needs the current password. Staff change their login name; students add or
-// change a username that works alongside their WUP ID (the ID itself never changes).
-app.post('/api/change-username', requireLogin, (req, res) => {
+// Change username — needs current password.
+app.post('/api/change-username', requireLogin, async (req, res) => {
   const { newUsername, currentPassword } = req.body;
   const role = req.session.role;
   const id = req.session.user_id;
@@ -522,7 +531,7 @@ app.post('/api/change-username', requireLogin, (req, res) => {
 
   const table = role === 'staff' ? 'staff' : 'students';
   const keyCol = role === 'staff' ? 'username' : 'id';
-  const row = db.prepare(`SELECT * FROM ${table} WHERE ${keyCol} = ?`).get(id);
+  const row = await db.prepare(`SELECT * FROM ${table} WHERE ${keyCol} = ?`).get(id);
   if (!row) return res.status(404).json({ error: 'Account not found.' });
   if (!verifyPassword(String(currentPassword), row.password_hash)) {
     return res.status(401).json({ error: 'Current password is incorrect.' });
@@ -531,33 +540,31 @@ app.post('/api/change-username', requireLogin, (req, res) => {
   const current = role === 'staff' ? row.username : (row.username || '');
   if (wanted === current.toLowerCase()) return res.status(400).json({ error: 'That is already your username.' });
 
-  // Must not collide with any staff username, any WUP ID, or any other student's username.
   const taken =
-    db.prepare('SELECT 1 FROM staff WHERE LOWER(username) = ? AND NOT (? = \'staff\' AND username = ?)').get(wanted, role, id) ||
-    db.prepare('SELECT 1 FROM students WHERE LOWER(id) = ?').get(wanted) ||
-    db.prepare("SELECT 1 FROM students WHERE username != '' AND LOWER(username) = ? AND id != ?").get(wanted, role === 'student' ? id : '');
+    (await db.prepare('SELECT 1 FROM staff WHERE LOWER(username) = ? AND NOT (? = \'staff\' AND username = ?)').get(wanted, role, id)) ||
+    (await db.prepare('SELECT 1 FROM students WHERE LOWER(id) = ?').get(wanted)) ||
+    (await db.prepare("SELECT 1 FROM students WHERE username != '' AND LOWER(username) = ? AND id != ?").get(wanted, role === 'student' ? id : ''));
   if (taken) return res.status(409).json({ error: 'That username is already taken. Try another one.' });
 
-  db.exec('BEGIN');
+  await db.exec('BEGIN');
   try {
     if (role === 'staff') {
-      db.prepare('UPDATE staff SET username = ? WHERE username = ?').run(wanted, id);
-      db.prepare("UPDATE sessions SET user_id = ? WHERE role = 'staff' AND user_id = ?").run(wanted, id);
+      await db.prepare('UPDATE staff SET username = ? WHERE username = ?').run(wanted, id);
+      await db.prepare("UPDATE sessions SET user_id = ? WHERE role = 'staff' AND user_id = ?").run(wanted, id);
     } else {
-      db.prepare('UPDATE students SET username = ? WHERE id = ?').run(wanted, id);
+      await db.prepare('UPDATE students SET username = ? WHERE id = ?').run(wanted, id);
     }
-    db.exec('COMMIT');
+    await db.exec('COMMIT');
   } catch (err) {
-    db.exec('ROLLBACK');
+    await db.exec('ROLLBACK');
     return res.status(500).json({ error: 'Could not change the username.' });
   }
-  res.json(buildUser(role, role === 'staff' ? wanted : id));
+  res.json(await buildUser(role, role === 'staff' ? wanted : id));
 });
 
 // ---------- contact information (email & phone) ----------
 
-// Update personal contact information (requires current password)
-app.post('/api/change-contact', requireLogin, (req, res) => {
+app.post('/api/change-contact', requireLogin, async (req, res) => {
   const { email, phoneNumber, currentPassword } = req.body;
   const id = req.session.user_id;
   const role = req.session.role;
@@ -568,7 +575,7 @@ app.post('/api/change-contact', requireLogin, (req, res) => {
 
   const table = role === 'staff' ? 'staff' : 'students';
   const keyCol = role === 'staff' ? 'username' : 'id';
-  const row = db.prepare(`SELECT * FROM ${table} WHERE ${keyCol} = ?`).get(id);
+  const row = await db.prepare(`SELECT * FROM ${table} WHERE ${keyCol} = ?`).get(id);
   if (!row) return res.status(404).json({ error: 'Account not found.' });
 
   if (!verifyPassword(String(currentPassword), row.password_hash)) {
@@ -579,30 +586,30 @@ app.post('/api/change-contact', requireLogin, (req, res) => {
   const cleanPhone = (phoneNumber || '').trim();
 
   if (role === 'staff') {
-    db.prepare('UPDATE staff SET email = ?, phone_number = ? WHERE username = ?').run(cleanEmail, cleanPhone, id);
+    await db.prepare('UPDATE staff SET email = ?, phone_number = ? WHERE username = ?').run(cleanEmail, cleanPhone, id);
   } else {
-    db.prepare('UPDATE students SET email = ?, phone_number = ? WHERE id = ?').run(cleanEmail, cleanPhone, id);
+    await db.prepare('UPDATE students SET email = ?, phone_number = ? WHERE id = ?').run(cleanEmail, cleanPhone, id);
   }
 
   res.json({ success: true, email: cleanEmail, phoneNumber: cleanPhone });
 });
 
 // Registrar staff managing student contact info
-app.patch('/api/students/:id', requireStaff, (req, res) => {
+app.patch('/api/students/:id', requireStaff, async (req, res) => {
   const id = req.params.id.toUpperCase();
   const { phoneNumber, email } = req.body;
 
-  const student = db.prepare('SELECT id FROM students WHERE id = ?').get(id);
+  const student = await db.prepare('SELECT id FROM students WHERE id = ?').get(id);
   if (!student) return res.status(404).json({ error: 'Student not found.' });
 
   if (phoneNumber !== undefined) {
-    db.prepare('UPDATE students SET phone_number = ? WHERE id = ?').run(String(phoneNumber).trim(), id);
+    await db.prepare('UPDATE students SET phone_number = ? WHERE id = ?').run(String(phoneNumber).trim(), id);
   }
   if (email !== undefined) {
-    db.prepare('UPDATE students SET email = ? WHERE id = ?').run(String(email).trim(), id);
+    await db.prepare('UPDATE students SET email = ? WHERE id = ?').run(String(email).trim(), id);
   }
 
-  const updated = db.prepare('SELECT id, name, course, phone_number, email FROM students WHERE id = ?').get(id);
+  const updated = await db.prepare('SELECT id, name, course, phone_number, email FROM students WHERE id = ?').get(id);
   res.json({
     id: updated.id,
     name: updated.name,
@@ -612,16 +619,15 @@ app.patch('/api/students/:id', requireStaff, (req, res) => {
   });
 });
 
-app.get('/api/students/:id', requireStaff, (req, res) => {
+app.get('/api/students/:id', requireStaff, async (req, res) => {
   const id = req.params.id.trim().toUpperCase();
-  const student = db.prepare('SELECT id, name, course, phone_number, email FROM students WHERE id = ?').get(id);
+  const student = await db.prepare('SELECT id, name, course, phone_number, email FROM students WHERE id = ?').get(id);
   if (!student) return res.status(404).json({ error: 'Student not found.' });
   res.json({ id: student.id, name: student.name, course: student.course, phoneNumber: student.phone_number, email: student.email });
 });
 
-// ---------- forgot password with OTP (MailJS and Phone SMS) ----------
+// ---------- forgot password with OTP ----------
 
-// Get current EmailJS configuration
 app.get('/api/auth/emailjs-config', (req, res) => {
   res.json({
     serviceId: emailjsConfig.serviceId || process.env.EMAILJS_SERVICE_ID || '',
@@ -630,7 +636,6 @@ app.get('/api/auth/emailjs-config', (req, res) => {
   });
 });
 
-// Update EmailJS configuration (persists in memory and returned to client)
 app.post('/api/auth/emailjs-config', (req, res) => {
   const { serviceId, templateId, publicKey } = req.body;
   if (serviceId !== undefined) emailjsConfig.serviceId = String(serviceId).trim();
@@ -639,7 +644,6 @@ app.post('/api/auth/emailjs-config', (req, res) => {
   res.json({ success: true, emailjsConfig });
 });
 
-// Get current Semaphore SMS configuration & live account balance status
 app.get('/api/auth/semaphore-config', async (req, res) => {
   const apiKey = (semaphoreConfig.apiKey || process.env.SEMAPHORE_API_KEY || '').trim();
   let account = null;
@@ -667,7 +671,6 @@ app.get('/api/auth/semaphore-config', async (req, res) => {
   });
 });
 
-// Get current SMS configuration (iProg SMS and Semaphore)
 app.get('/api/auth/sms-config', async (req, res) => {
   const iprogToken = (iprogConfig.apiToken || process.env.IPROG_API_TOKEN || '').trim();
   const semKey = (semaphoreConfig.apiKey || process.env.SEMAPHORE_API_KEY || '').trim();
@@ -696,7 +699,6 @@ app.get('/api/auth/sms-config', async (req, res) => {
   });
 });
 
-// Update SMS configuration (switch provider, save tokens)
 app.post('/api/auth/sms-config', (req, res) => {
   const { provider, iprogToken, semaphoreApiKey, semaphoreSenderName } = req.body;
   if (provider && (provider === 'iprog' || provider === 'semaphore')) {
@@ -719,7 +721,6 @@ app.post('/api/auth/sms-config', (req, res) => {
   });
 });
 
-// Update Semaphore SMS configuration (legacy alias)
 app.post('/api/auth/semaphore-config', (req, res) => {
   const { apiKey, senderName } = req.body;
   if (apiKey !== undefined) semaphoreConfig.apiKey = String(apiKey).trim();
@@ -728,19 +729,18 @@ app.post('/api/auth/semaphore-config', (req, res) => {
 });
 
 // Step 1: Look up account by Student ID, Username, or Registered Email
-app.post('/api/auth/forgot-password/lookup', (req, res) => {
+app.post('/api/auth/forgot-password/lookup', async (req, res) => {
   const identifier = String(req.body.identifier || '').trim();
   if (!identifier) {
     return res.status(400).json({ error: 'Please enter your Student ID, username, or registered email.' });
   }
 
-  // Look in students by Student ID, registered email, or username
-  let student = db.prepare("SELECT * FROM students WHERE UPPER(id) = UPPER(?)").get(identifier);
+  let student = await db.prepare("SELECT * FROM students WHERE UPPER(id) = UPPER(?)").get(identifier);
   if (!student) {
-    student = db.prepare("SELECT * FROM students WHERE LOWER(email) = LOWER(?) AND email != ''").get(identifier);
+    student = await db.prepare("SELECT * FROM students WHERE LOWER(email) = LOWER(?) AND email != ''").get(identifier);
   }
   if (!student) {
-    student = db.prepare("SELECT * FROM students WHERE LOWER(username) = LOWER(?) AND username != ''").get(identifier);
+    student = await db.prepare("SELECT * FROM students WHERE LOWER(username) = LOWER(?) AND username != ''").get(identifier);
   }
 
   if (student) {
@@ -757,10 +757,9 @@ app.post('/api/auth/forgot-password/lookup', (req, res) => {
     });
   }
 
-  // Look in staff by staff username or registered email
-  let staff = db.prepare('SELECT * FROM staff WHERE LOWER(username) = LOWER(?)').get(identifier);
+  let staff = await db.prepare('SELECT * FROM staff WHERE LOWER(username) = LOWER(?)').get(identifier);
   if (!staff) {
-    staff = db.prepare("SELECT * FROM staff WHERE LOWER(email) = LOWER(?) AND email != ''").get(identifier);
+    staff = await db.prepare("SELECT * FROM staff WHERE LOWER(email) = LOWER(?) AND email != ''").get(identifier);
   }
 
   if (staff) {
@@ -780,7 +779,7 @@ app.post('/api/auth/forgot-password/lookup', (req, res) => {
   res.status(404).json({ error: 'No account found. Please check your Student ID, username, or registered email.' });
 });
 
-// Step 2: Send OTP via chosen delivery method (Email / MailJS or Phone / SMS via Semaphore)
+// Step 2: Send OTP
 app.post('/api/auth/forgot-password/send-otp', async (req, res) => {
   const { identifier, method, customTarget } = req.body;
   const deliveryMethod = method === 'email' ? 'email' : 'sms';
@@ -789,17 +788,16 @@ app.post('/api/auth/forgot-password/send-otp', async (req, res) => {
     return res.status(400).json({ error: 'Account identifier is required.' });
   }
 
-  // Find student by Student ID, email, or username; or staff by staff username or email
-  let student = db.prepare("SELECT * FROM students WHERE UPPER(id) = UPPER(?)").get(String(identifier).trim());
+  let student = await db.prepare("SELECT * FROM students WHERE UPPER(id) = UPPER(?)").get(String(identifier).trim());
   if (!student) {
-    student = db.prepare("SELECT * FROM students WHERE LOWER(email) = LOWER(?) AND email != ''").get(String(identifier).trim());
+    student = await db.prepare("SELECT * FROM students WHERE LOWER(email) = LOWER(?) AND email != ''").get(String(identifier).trim());
   }
   if (!student) {
-    student = db.prepare("SELECT * FROM students WHERE LOWER(username) = LOWER(?) AND username != ''").get(String(identifier).trim());
+    student = await db.prepare("SELECT * FROM students WHERE LOWER(username) = LOWER(?) AND username != ''").get(String(identifier).trim());
   }
-  let staff = !student ? db.prepare('SELECT * FROM staff WHERE LOWER(username) = LOWER(?)').get(String(identifier).trim()) : null;
+  let staff = !student ? await db.prepare('SELECT * FROM staff WHERE LOWER(username) = LOWER(?)').get(String(identifier).trim()) : null;
   if (!student && !staff) {
-    staff = db.prepare("SELECT * FROM staff WHERE LOWER(email) = LOWER(?) AND email != ''").get(String(identifier).trim());
+    staff = await db.prepare("SELECT * FROM staff WHERE LOWER(email) = LOWER(?) AND email != ''").get(String(identifier).trim());
   }
 
   const user = student || staff;
@@ -817,10 +815,9 @@ app.post('/api/auth/forgot-password/send-otp', async (req, res) => {
       return res.status(400).json({ error: 'No valid recovery email registered for this account.' });
     }
     targetDestination = rawEmail;
-    // If user has no email in DB, save it for future recovery
     if (!user.email && rawEmail) {
-      if (userType === 'student') db.prepare('UPDATE students SET email = ? WHERE id = ?').run(rawEmail, userId);
-      else db.prepare('UPDATE staff SET email = ? WHERE username = ?').run(rawEmail, userId);
+      if (userType === 'student') await db.prepare('UPDATE students SET email = ? WHERE id = ?').run(rawEmail, userId);
+      else await db.prepare('UPDATE staff SET email = ? WHERE username = ?').run(rawEmail, userId);
     }
   } else {
     const rawPhone = String(customTarget || user.phone_number || '').trim();
@@ -828,30 +825,27 @@ app.post('/api/auth/forgot-password/send-otp', async (req, res) => {
       return res.status(400).json({ error: 'A valid phone number is required to receive the OTP.' });
     }
     targetDestination = rawPhone;
-    // If user has no phone in DB, save it
     if (!user.phone_number && rawPhone) {
-      if (userType === 'student') db.prepare('UPDATE students SET phone_number = ? WHERE id = ?').run(rawPhone, userId);
-      else db.prepare('UPDATE staff SET phone_number = ? WHERE username = ?').run(rawPhone, userId);
+      if (userType === 'student') await db.prepare('UPDATE students SET phone_number = ? WHERE id = ?').run(rawPhone, userId);
+      else await db.prepare('UPDATE staff SET phone_number = ? WHERE username = ?').run(rawPhone, userId);
     }
   }
 
-  // Invalidate any previous pending OTPs for this user
-  db.prepare('UPDATE password_reset_otps SET used = 1 WHERE user_id = ? AND used = 0').run(userId);
+  // Invalidate any previous pending OTPs
+  await db.prepare('UPDATE password_reset_otps SET used = 1 WHERE user_id = ? AND used = 0').run(userId);
 
-  // Generate secure 6-digit numeric OTP code
   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
   const resetToken = crypto.randomBytes(32).toString('hex');
   const now = Date.now();
-  const expiresAt = now + 10 * 60 * 1000; // 10 minutes expiry
+  const expiresAt = now + 10 * 60 * 1000;
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO password_reset_otps (user_type, user_id, delivery_method, target_destination, otp_code, reset_token, expires_at, used, attempts, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?)
   `).run(userType, userId, deliveryMethod, targetDestination, otpCode, resetToken, expiresAt, now);
 
   const masked = deliveryMethod === 'email' ? maskEmail(targetDestination) : maskPhone(targetDestination);
 
-  // If method is SMS, dispatch through active SMS gateway (iProg SMS or Semaphore)
   let smsResult = null;
   if (deliveryMethod === 'sms') {
     smsResult = await dispatchSmsOtp(targetDestination, otpCode);
@@ -871,40 +865,40 @@ app.post('/api/auth/forgot-password/send-otp', async (req, res) => {
     rawTarget: targetDestination,
     normalizedPhone: normalizePhPhone(targetDestination),
     userName: user.name,
-    otpCode, // Returned for client-side SMS notification simulation and MailJS SDK dispatch
+    otpCode,
     expiresInSeconds: 600,
     emailjsConfig: cfg,
     smsResult
   });
 });
 
-// Step 3: Verify the 6-digit OTP
-app.post('/api/auth/forgot-password/verify-otp', (req, res) => {
+// Step 3: Verify OTP
+app.post('/api/auth/forgot-password/verify-otp', async (req, res) => {
   const { resetToken, otpCode } = req.body;
   if (!resetToken || !otpCode) {
     return res.status(400).json({ error: 'Verification token and OTP code are required.' });
   }
 
-  const record = db.prepare('SELECT * FROM password_reset_otps WHERE reset_token = ?').get(resetToken);
+  const record = await db.prepare('SELECT * FROM password_reset_otps WHERE reset_token = ?').get(resetToken);
   if (!record) {
     return res.status(404).json({ error: 'Invalid or expired reset session. Please request a new code.' });
   }
 
-  if (record.used === 1) {
+  if (Number(record.used) === 1) {
     return res.status(400).json({ error: 'This verification code has already been used. Please request a new one.' });
   }
 
-  if (record.expires_at < Date.now()) {
+  if (Number(record.expires_at) < Date.now()) {
     return res.status(400).json({ error: 'This verification code has expired. Please request a new code.' });
   }
 
-  if (record.attempts >= 5) {
+  if (Number(record.attempts) >= 5) {
     return res.status(400).json({ error: 'Too many incorrect attempts. Please request a new code.' });
   }
 
   if (record.otp_code.trim() !== String(otpCode).trim()) {
-    db.prepare('UPDATE password_reset_otps SET attempts = attempts + 1 WHERE id = ?').run(record.id);
-    const remaining = 4 - record.attempts;
+    await db.prepare('UPDATE password_reset_otps SET attempts = attempts + 1 WHERE id = ?').run(record.id);
+    const remaining = 4 - Number(record.attempts);
     return res.status(400).json({
       error: remaining > 0
         ? `Incorrect verification code. ${remaining} attempt(s) remaining.`
@@ -912,9 +906,8 @@ app.post('/api/auth/forgot-password/verify-otp', (req, res) => {
     });
   }
 
-  // OTP verified! Generate change token
   const changeToken = crypto.randomBytes(32).toString('hex');
-  db.prepare('UPDATE password_reset_otps SET used = 1, change_token = ? WHERE id = ?').run(changeToken, record.id);
+  await db.prepare('UPDATE password_reset_otps SET used = 1, change_token = ? WHERE id = ?').run(changeToken, record.id);
 
   res.json({
     success: true,
@@ -924,8 +917,8 @@ app.post('/api/auth/forgot-password/verify-otp', (req, res) => {
   });
 });
 
-// Step 4: Reset password with verified change token
-app.post('/api/auth/forgot-password/reset-password', (req, res) => {
+// Step 4: Reset password
+app.post('/api/auth/forgot-password/reset-password', async (req, res) => {
   const { changeToken, newPassword } = req.body;
   if (!changeToken || !newPassword) {
     return res.status(400).json({ error: 'Change token and new password are required.' });
@@ -935,34 +928,30 @@ app.post('/api/auth/forgot-password/reset-password', (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
   }
 
-  const record = db.prepare('SELECT * FROM password_reset_otps WHERE change_token = ?').get(changeToken);
+  const record = await db.prepare('SELECT * FROM password_reset_otps WHERE change_token = ?').get(changeToken);
   if (!record) {
     return res.status(400).json({ error: 'Invalid or expired password reset session. Please try again.' });
   }
 
-  // Allow 15 minutes to reset password after OTP verification
-  if (record.expires_at + 15 * 60 * 1000 < Date.now()) {
+  if (Number(record.expires_at) + 15 * 60 * 1000 < Date.now()) {
     return res.status(400).json({ error: 'Password reset session has expired. Please start over.' });
   }
 
   const hashedPassword = hashPassword(newPassword);
   if (record.user_type === 'student') {
-    db.prepare('UPDATE students SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(hashedPassword, record.user_id);
+    await db.prepare('UPDATE students SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(hashedPassword, record.user_id);
     if (record.delivery_method === 'email' && record.target_destination) {
-      db.prepare('UPDATE students SET email = ? WHERE id = ?').run(record.target_destination, record.user_id);
+      await db.prepare('UPDATE students SET email = ? WHERE id = ?').run(record.target_destination, record.user_id);
     }
   } else {
-    db.prepare('UPDATE staff SET password_hash = ?, must_change_password = 0 WHERE username = ?').run(hashedPassword, record.user_id);
+    await db.prepare('UPDATE staff SET password_hash = ?, must_change_password = 0 WHERE username = ?').run(hashedPassword, record.user_id);
     if (record.delivery_method === 'email' && record.target_destination) {
-      db.prepare('UPDATE staff SET email = ? WHERE username = ?').run(record.target_destination, record.user_id);
+      await db.prepare('UPDATE staff SET email = ? WHERE username = ?').run(record.target_destination, record.user_id);
     }
   }
 
-  // Clear change_token so it cannot be reused
-  db.prepare("UPDATE password_reset_otps SET change_token = '' WHERE id = ?").run(record.id);
-
-  // Terminate any active sessions for this user so they log in fresh
-  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(record.user_id);
+  await db.prepare("UPDATE password_reset_otps SET change_token = '' WHERE id = ?").run(record.id);
+  await db.prepare('DELETE FROM sessions WHERE user_id = ?').run(record.user_id);
 
   res.json({
     success: true,
@@ -973,17 +962,16 @@ app.post('/api/auth/forgot-password/reset-password', (req, res) => {
 
 // ---------- requests: read ----------
 
-app.get('/api/requests', requireLogin, (req, res) => {
-  // students can only ever see their own requests; staff see everything
+app.get('/api/requests', requireLogin, async (req, res) => {
   const studentId = req.session.role === 'student' ? req.session.user_id : (req.query.studentId || undefined);
-  res.json(getAllRequests({ studentId }));
+  res.json(await getAllRequests({ studentId }));
 });
 
-app.get('/api/requests/lookup/:ref', requireLogin, (req, res) => {
+app.get('/api/requests/lookup/:ref', requireLogin, async (req, res) => {
   const ref = req.params.ref.trim().toUpperCase();
-  const match = db.prepare('SELECT ref FROM requests WHERE UPPER(ref) = ?').get(ref);
+  const match = await db.prepare('SELECT ref FROM requests WHERE UPPER(ref) = ?').get(ref);
   if (!match) return res.status(404).json({ error: 'Not found.' });
-  const full = getFullRequest(match.ref);
+  const full = await getFullRequest(match.ref);
   if (req.session.role === 'student' && full.studentId !== req.session.user_id) {
     return res.status(404).json({ error: 'Not found.' });
   }
@@ -992,7 +980,7 @@ app.get('/api/requests/lookup/:ref', requireLogin, (req, res) => {
 
 // ---------- requests: create ----------
 
-app.post('/api/requests', requireLogin, (req, res) => {
+app.post('/api/requests', requireLogin, async (req, res) => {
   const { items, orNumber, assessmentPhoto } = req.body;
 
   const studentId = req.session.role === 'student' ? req.session.user_id : req.body.studentId;
@@ -1000,8 +988,8 @@ app.post('/api/requests', requireLogin, (req, res) => {
     return res.status(400).json({ error: 'Missing required fields.' });
   }
 
-  // Only active documents from the Documents list can be requested.
-  const activeDocs = db.prepare('SELECT name FROM documents WHERE active = 1').all().map(d => d.name);
+  const activeDocsRows = await db.prepare('SELECT name FROM documents WHERE active = 1').all();
+  const activeDocs = activeDocsRows.map(d => d.name);
   const cleanItems = [];
   for (const it of items) {
     const match = activeDocs.find(n => n.toLowerCase() === String(it.name || '').toLowerCase());
@@ -1014,52 +1002,52 @@ app.post('/api/requests', requireLogin, (req, res) => {
 
   const orClean = normalizeOr(orNumber);
 
-  const receipt = findOfficialReceipt(orClean);
+  const receipt = await findOfficialReceipt(orClean);
   if (!receipt) {
     return res.status(400).json({ error: 'Invalid Official Receipt (OR) number. Receipt not found in Treasury records.' });
   }
   if (receipt.student_id && receipt.student_id.toUpperCase() !== studentId.toUpperCase()) {
     return res.status(400).json({ error: `This OR number was issued to student ${receipt.student_id}.` });
   }
-  if (isOrUsed(orClean)) {
+  if (await isOrUsed(orClean)) {
     return res.status(409).json({ error: OR_USED_MESSAGE });
   }
 
-  const student = db.prepare('SELECT id FROM students WHERE id = ?').get(studentId);
+  const student = await db.prepare('SELECT id FROM students WHERE id = ?').get(studentId);
   if (!student) return res.status(404).json({ error: 'Student not found.' });
 
-  const ref = nextRef();
+  const ref = await nextRef();
   const dateSubmitted = new Date().toLocaleString();
 
-  db.exec('BEGIN');
+  await db.exec('BEGIN');
   try {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO requests (ref, student_id, or_number, assessment_photo, clearance_photo, status, rejection_reason, date_submitted)
       VALUES (?, ?, ?, ?, ?, 'pending_verification', '', ?)
     `).run(ref, studentId, orClean, assessmentPhoto, '', dateSubmitted);
 
     const insertItem = db.prepare('INSERT INTO request_items (ref, name, copies) VALUES (?, ?, ?)');
-    cleanItems.forEach(it => insertItem.run(ref, it.name, it.copies));
+    for (const it of cleanItems) {
+      await insertItem.run(ref, it.name, it.copies);
+    }
 
-    db.prepare('INSERT INTO request_timeline (ref, title, time) VALUES (?, ?, ?)')
+    await db.prepare('INSERT INTO request_timeline (ref, title, time) VALUES (?, ?, ?)')
       .run(ref, `Submitted Online with OR ${orClean} & Assessment Form`, nowTime());
 
-    db.exec('COMMIT');
+    await db.exec('COMMIT');
   } catch (err) {
-    db.exec('ROLLBACK');
-    // The unique index catches two students submitting the same OR number at the same moment.
+    await db.exec('ROLLBACK');
     if (/UNIQUE/i.test(String(err.message))) return res.status(409).json({ error: OR_USED_MESSAGE });
     return res.status(500).json({ error: 'Failed to create request.' });
   }
 
-  res.status(201).json(getFullRequest(ref));
+  res.status(201).json(await getFullRequest(ref));
 });
 
 // ---------- requests: status actions ----------
 
-// Loads a request and checks it is in the status the action expects.
-function loadForAction(req, res, expectedStatus) {
-  const row = db.prepare('SELECT status FROM requests WHERE ref = ?').get(req.params.ref);
+async function loadForAction(req, res, expectedStatus) {
+  const row = await db.prepare('SELECT status FROM requests WHERE ref = ?').get(req.params.ref);
   if (!row) { res.status(404).json({ error: 'Not found.' }); return null; }
   if (row.status !== expectedStatus) {
     res.status(409).json({ error: 'This request is no longer in the right step for that action. Refresh and try again.' });
@@ -1068,65 +1056,63 @@ function loadForAction(req, res, expectedStatus) {
   return row;
 }
 
-app.post('/api/requests/:ref/approve-payment', requireStaff, (req, res) => {
-  if (!loadForAction(req, res, 'pending_verification')) return;
+app.post('/api/requests/:ref/approve-payment', requireStaff, async (req, res) => {
+  if (!(await loadForAction(req, res, 'pending_verification'))) return;
   const ref = req.params.ref;
-  addTimelineAndStatus(ref, 'processing', 'OR & Assessment Verified by Registrar; Document In-Processing');
-  res.json(getFullRequest(ref));
+  await addTimelineAndStatus(ref, 'processing', 'OR & Assessment Verified by Registrar; Document In-Processing');
+  res.json(await getFullRequest(ref));
 });
 
-app.post('/api/requests/:ref/mark-ready', requireStaff, (req, res) => {
+app.post('/api/requests/:ref/mark-ready', requireStaff, async (req, res) => {
   const claimDate = String(req.body.claimDate || '').trim();
   if (!isValidDate(claimDate)) return res.status(400).json({ error: 'Pick a claim date.' });
   if (claimDate < todayPH()) return res.status(400).json({ error: 'The claim date cannot be in the past.' });
-  if (!loadForAction(req, res, 'processing')) return;
+  if (!(await loadForAction(req, res, 'processing'))) return;
   const ref = req.params.ref;
-  db.prepare('UPDATE requests SET claim_date = ? WHERE ref = ?').run(claimDate, ref);
-  addTimelineAndStatus(ref, 'ready', `Ready to Claim at the Registrar Claiming Window on ${prettyDate(claimDate)}`);
-  res.json(getFullRequest(ref));
+  await db.prepare('UPDATE requests SET claim_date = ? WHERE ref = ?').run(claimDate, ref);
+  await addTimelineAndStatus(ref, 'ready', `Ready to Claim at the Registrar Claiming Window on ${prettyDate(claimDate)}`);
+  res.json(await getFullRequest(ref));
 });
 
-// The registrar can move the claim date while the request is still waiting to be claimed.
-app.post('/api/requests/:ref/claim-date', requireStaff, (req, res) => {
+app.post('/api/requests/:ref/claim-date', requireStaff, async (req, res) => {
   const claimDate = String(req.body.claimDate || '').trim();
   if (!isValidDate(claimDate)) return res.status(400).json({ error: 'Pick a claim date.' });
   if (claimDate < todayPH()) return res.status(400).json({ error: 'The claim date cannot be in the past.' });
-  if (!loadForAction(req, res, 'ready')) return;
+  if (!(await loadForAction(req, res, 'ready'))) return;
   const ref = req.params.ref;
-  db.prepare('UPDATE requests SET claim_date = ? WHERE ref = ?').run(claimDate, ref);
-  db.prepare('INSERT INTO request_timeline (ref, title, time) VALUES (?, ?, ?)')
+  await db.prepare('UPDATE requests SET claim_date = ? WHERE ref = ?').run(claimDate, ref);
+  await db.prepare('INSERT INTO request_timeline (ref, title, time) VALUES (?, ?, ?)')
     .run(ref, `Claim date changed to ${prettyDate(claimDate)}`, nowTime());
-  res.json(getFullRequest(ref));
+  res.json(await getFullRequest(ref));
 });
 
-app.post('/api/requests/:ref/mark-completed', requireStaff, (req, res) => {
-  if (!loadForAction(req, res, 'ready')) return;
+app.post('/api/requests/:ref/mark-completed', requireStaff, async (req, res) => {
+  if (!(await loadForAction(req, res, 'ready'))) return;
   const ref = req.params.ref;
-  addTimelineAndStatus(ref, 'completed', 'Document Claimed at Window Counter');
-  res.json(getFullRequest(ref));
+  await addTimelineAndStatus(ref, 'completed', 'Document Claimed at Window Counter');
+  res.json(await getFullRequest(ref));
 });
 
-app.post('/api/requests/:ref/decline', requireStaff, (req, res) => {
+app.post('/api/requests/:ref/decline', requireStaff, async (req, res) => {
   const reason = (req.body.reason || '').trim();
   if (!reason) return res.status(400).json({ error: 'A reason for declining is required.' });
-  if (!loadForAction(req, res, 'pending_verification')) return;
+  if (!(await loadForAction(req, res, 'pending_verification'))) return;
   const ref = req.params.ref;
 
-  db.prepare('UPDATE requests SET status = ?, rejection_reason = ? WHERE ref = ?').run('declined', reason, ref);
-  db.prepare('INSERT INTO request_timeline (ref, title, time) VALUES (?, ?, ?)')
+  await db.prepare('UPDATE requests SET status = ?, rejection_reason = ? WHERE ref = ?').run('declined', reason, ref);
+  await db.prepare('INSERT INTO request_timeline (ref, title, time) VALUES (?, ?, ?)')
     .run(ref, `Declined: ${reason}`, nowTime());
 
-  res.json(getFullRequest(ref));
+  res.json(await getFullRequest(ref));
 });
 
 // ---------- OR numbers & Treasury Official Receipts ----------
 
-// Lets the student form check whether an OR number is valid and available as soon as it is typed.
-app.get('/api/or-check', requireLogin, (req, res) => {
+app.get('/api/or-check', requireLogin, async (req, res) => {
   const or = normalizeOr(req.query.or);
   if (!or) return res.json({ valid: false, used: false, error: '' });
 
-  const receipt = findOfficialReceipt(or);
+  const receipt = await findOfficialReceipt(or);
   if (!receipt) {
     return res.json({
       valid: false,
@@ -1144,7 +1130,7 @@ app.get('/api/or-check', requireLogin, (req, res) => {
     });
   }
 
-  if (isOrUsed(or)) {
+  if (await isOrUsed(or)) {
     return res.json({
       valid: false,
       used: true,
@@ -1166,9 +1152,8 @@ app.get('/api/or-check', requireLogin, (req, res) => {
   });
 });
 
-// List official receipts (staff only)
-app.get('/api/receipts', requireStaff, (req, res) => {
-  const rows = db.prepare(`
+app.get('/api/receipts', requireStaff, async (req, res) => {
+  const rows = await db.prepare(`
     SELECT 
       r.or_number,
       r.student_id,
@@ -1197,40 +1182,37 @@ app.get('/api/receipts', requireStaff, (req, res) => {
   })));
 });
 
-// Next sequential OR number preview (staff only)
-app.get('/api/receipts/next-or', requireStaff, (req, res) => {
-  res.json({ orNumber: nextOrNumber() });
+app.get('/api/receipts/next-or', requireStaff, async (req, res) => {
+  res.json({ orNumber: await nextOrNumber() });
 });
 
-// Auto-generate and register a new valid OR number into official_receipts (staff only)
-app.post('/api/receipts/generate', requireStaff, (req, res) => {
+app.post('/api/receipts/generate', requireStaff, async (req, res) => {
   const targetStudentId = String(req.body.studentId || '').trim().toUpperCase();
 
   let targetStudentName = '';
   if (targetStudentId) {
-    const stu = db.prepare('SELECT name FROM students WHERE id = ?').get(targetStudentId);
+    const stu = await db.prepare('SELECT name FROM students WHERE id = ?').get(targetStudentId);
     if (stu) targetStudentName = stu.name;
   }
   if (!targetStudentName && req.body.studentName) {
     targetStudentName = String(req.body.studentName).trim();
   }
 
-  const orNumber = nextOrNumber();
+  const orNumber = await nextOrNumber();
   const amount = Number(req.body.amount) || 150;
   const description = String(req.body.description || 'Auto-generated Treasury Receipt').trim();
   const dateIssued = todayPH();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO official_receipts (or_number, student_id, student_name, amount, description, date_issued)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(orNumber, targetStudentId, targetStudentName, amount, description, dateIssued);
 
-  res.status(201).json(findOfficialReceipt(orNumber));
+  res.status(201).json(await findOfficialReceipt(orNumber));
 });
 
-// Staff can add new receipts from Treasury (Student ID is required)
-app.post('/api/receipts', requireStaff, (req, res) => {
-  const orNumber = normalizeOr(req.body.orNumber) || nextOrNumber();
+app.post('/api/receipts', requireStaff, async (req, res) => {
+  const orNumber = normalizeOr(req.body.orNumber) || (await nextOrNumber());
   const studentId = String(req.body.studentId || '').trim().toUpperCase();
   let studentName = String(req.body.studentName || '').trim();
   const amount = Number(req.body.amount) || 0;
@@ -1241,7 +1223,7 @@ app.post('/api/receipts', requireStaff, (req, res) => {
     return res.status(400).json({ error: 'Student ID is required to add an Official Receipt.' });
   }
 
-  const student = db.prepare('SELECT id, name FROM students WHERE id = ?').get(studentId);
+  const student = await db.prepare('SELECT id, name FROM students WHERE id = ?').get(studentId);
   if (!student) {
     return res.status(404).json({ error: `Student with ID "${studentId}" was not found in university records.` });
   }
@@ -1250,72 +1232,73 @@ app.post('/api/receipts', requireStaff, (req, res) => {
     studentName = student.name;
   }
 
-  if (findOfficialReceipt(orNumber)) {
+  if (await findOfficialReceipt(orNumber)) {
     return res.status(409).json({ error: 'This OR number already exists in Treasury records.' });
   }
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO official_receipts (or_number, student_id, student_name, amount, description, date_issued)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(orNumber, student.id, studentName, amount, description, dateIssued);
 
-  res.status(201).json(findOfficialReceipt(orNumber));
+  res.status(201).json(await findOfficialReceipt(orNumber));
 });
 
-// Staff can delete an unused receipt
-app.delete('/api/receipts/:or', requireStaff, (req, res) => {
+app.delete('/api/receipts/:or', requireStaff, async (req, res) => {
   const or = normalizeOr(req.params.or);
-  const receipt = findOfficialReceipt(or);
+  const receipt = await findOfficialReceipt(or);
   if (!receipt) return res.status(404).json({ error: 'Receipt not found.' });
-  if (isOrUsed(or)) {
+  if (await isOrUsed(or)) {
     return res.status(400).json({ error: 'Cannot delete an OR number that has already been used in an active request.' });
   }
-  db.prepare('DELETE FROM official_receipts WHERE UPPER(or_number) = ?').run(or);
+  await db.prepare('DELETE FROM official_receipts WHERE UPPER(or_number) = ?').run(or);
   res.json({ deleted: true });
 });
 
-// ---------- documents students can request (managed by the registrar) ----------
+// ---------- documents students can request ----------
 
 function docRow(d) {
   return { id: d.id, name: d.name, description: d.description, active: !!d.active };
 }
 
-app.get('/api/documents', requireLogin, (req, res) => {
+app.get('/api/documents', requireLogin, async (req, res) => {
   const rows = req.session.role === 'staff'
-    ? db.prepare('SELECT * FROM documents ORDER BY sort_order, id').all()
-    : db.prepare('SELECT * FROM documents WHERE active = 1 ORDER BY sort_order, id').all();
+    ? await db.prepare('SELECT * FROM documents ORDER BY sort_order, id').all()
+    : await db.prepare('SELECT * FROM documents WHERE active = 1 ORDER BY sort_order, id').all();
   res.json(rows.map(docRow));
 });
 
-app.post('/api/documents', requireStaff, (req, res) => {
+app.post('/api/documents', requireStaff, async (req, res) => {
   const name = String(req.body.name || '').trim();
   const description = String(req.body.description || '').trim();
   if (!name) return res.status(400).json({ error: 'Document name is required.' });
   if (name.length > 80) return res.status(400).json({ error: 'Document name is too long (80 characters max).' });
-  if (db.prepare('SELECT 1 FROM documents WHERE name = ?').get(name)) {
+  if (await db.prepare('SELECT 1 FROM documents WHERE name = ?').get(name)) {
     return res.status(409).json({ error: 'A document with this name already exists.' });
   }
 
-  db.exec('BEGIN');
+  await db.exec('BEGIN');
   try {
-    const nextSort = db.prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM documents').get().n;
-    const info = db.prepare('INSERT INTO documents (name, description, active, sort_order) VALUES (?, ?, 1, ?)')
+    const sortRes = await db.prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM documents').get();
+    const nextSort = Number(sortRes?.n || 1);
+    const info = await db.prepare('INSERT INTO documents (name, description, active, sort_order) VALUES (?, ?, 1, ?)')
       .run(name, description, nextSort);
-    // A new document gets a Clearance Fees row (price 0) so the registrar can set its price.
-    if (!db.prepare('SELECT 1 FROM fees WHERE name = ?').get(name)) {
-      const feeSort = db.prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM fees').get().n;
-      db.prepare('INSERT INTO fees (name, price, sort_order) VALUES (?, 0, ?)').run(name, feeSort);
+    if (!(await db.prepare('SELECT 1 FROM fees WHERE name = ?').get(name))) {
+      const feeRes = await db.prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM fees').get();
+      const feeSort = Number(feeRes?.n || 1);
+      await db.prepare('INSERT INTO fees (name, price, sort_order) VALUES (?, 0, ?)').run(name, feeSort);
     }
-    db.exec('COMMIT');
-    res.status(201).json(docRow(db.prepare('SELECT * FROM documents WHERE id = ?').get(info.lastInsertRowid)));
+    await db.exec('COMMIT');
+    const created = await db.prepare('SELECT * FROM documents WHERE id = ?').get(info.lastInsertRowid);
+    res.status(201).json(docRow(created || { id: info.lastInsertRowid, name, description, active: 1 }));
   } catch (err) {
-    db.exec('ROLLBACK');
+    await db.exec('ROLLBACK');
     res.status(500).json({ error: 'Could not add the document.' });
   }
 });
 
-app.patch('/api/documents/:id', requireStaff, (req, res) => {
-  const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(Number(req.params.id));
+app.patch('/api/documents/:id', requireStaff, async (req, res) => {
+  const doc = await db.prepare('SELECT * FROM documents WHERE id = ?').get(Number(req.params.id));
   if (!doc) return res.status(404).json({ error: 'Document not found.' });
 
   const name = req.body.name !== undefined ? String(req.body.name).trim() : doc.name;
@@ -1324,89 +1307,90 @@ app.patch('/api/documents/:id', requireStaff, (req, res) => {
 
   if (!name) return res.status(400).json({ error: 'Document name is required.' });
   if (name.length > 80) return res.status(400).json({ error: 'Document name is too long (80 characters max).' });
-  const clash = db.prepare('SELECT id FROM documents WHERE name = ? AND id != ?').get(name, doc.id);
+  const clash = await db.prepare('SELECT id FROM documents WHERE name = ? AND id != ?').get(name, doc.id);
   if (clash) return res.status(409).json({ error: 'A document with this name already exists.' });
 
-  db.exec('BEGIN');
+  await db.exec('BEGIN');
   try {
-    db.prepare('UPDATE documents SET name = ?, description = ?, active = ? WHERE id = ?').run(name, description, active, doc.id);
-    // Renaming keeps old requests readable, and keeps the matching fee row in step.
+    await db.prepare('UPDATE documents SET name = ?, description = ?, active = ? WHERE id = ?').run(name, description, active, doc.id);
     if (name !== doc.name) {
-      db.prepare('UPDATE request_items SET name = ? WHERE name = ?').run(name, doc.name);
-      const feeClash = db.prepare('SELECT id FROM fees WHERE name = ?').get(name);
-      if (!feeClash) db.prepare('UPDATE fees SET name = ? WHERE name = ?').run(name, doc.name);
+      await db.prepare('UPDATE request_items SET name = ? WHERE name = ?').run(name, doc.name);
+      const feeClash = await db.prepare('SELECT id FROM fees WHERE name = ?').get(name);
+      if (!feeClash) await db.prepare('UPDATE fees SET name = ? WHERE name = ?').run(name, doc.name);
     }
-    db.exec('COMMIT');
+    await db.exec('COMMIT');
   } catch (err) {
-    db.exec('ROLLBACK');
+    await db.exec('ROLLBACK');
     return res.status(500).json({ error: 'Could not update the document.' });
   }
-  res.json(docRow(db.prepare('SELECT * FROM documents WHERE id = ?').get(doc.id)));
+  res.json(docRow(await db.prepare('SELECT * FROM documents WHERE id = ?').get(doc.id)));
 });
 
-app.delete('/api/documents/:id', requireStaff, (req, res) => {
-  const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(Number(req.params.id));
+app.delete('/api/documents/:id', requireStaff, async (req, res) => {
+  const doc = await db.prepare('SELECT * FROM documents WHERE id = ?').get(Number(req.params.id));
   if (!doc) return res.status(404).json({ error: 'Document not found.' });
-  // Past requests keep their own copy of the document name, so deleting never breaks them.
-  db.exec('BEGIN');
+
+  await db.exec('BEGIN');
   try {
-    db.prepare('DELETE FROM documents WHERE id = ?').run(doc.id);
-    db.prepare('DELETE FROM fees WHERE name = ?').run(doc.name); // its matching price row goes too
-    db.exec('COMMIT');
+    await db.prepare('DELETE FROM documents WHERE id = ?').run(doc.id);
+    await db.prepare('DELETE FROM fees WHERE name = ?').run(doc.name);
+    await db.exec('COMMIT');
   } catch (err) {
-    db.exec('ROLLBACK');
+    await db.exec('ROLLBACK');
     return res.status(500).json({ error: 'Could not delete the document.' });
   }
   res.json({ deleted: true });
 });
 
-// ---------- Clearance Fees (price reference) ----------
+// ---------- Clearance Fees ----------
 
 function feeRow(f) {
   return { id: f.id, name: f.name, price: f.price };
 }
 
-app.get('/api/fees', requireLogin, (req, res) => {
-  res.json(db.prepare('SELECT * FROM fees ORDER BY sort_order, id').all().map(feeRow));
+app.get('/api/fees', requireLogin, async (req, res) => {
+  const rows = await db.prepare('SELECT * FROM fees ORDER BY sort_order, id').all();
+  res.json(rows.map(feeRow));
 });
 
-app.patch('/api/fees/:id', requireStaff, (req, res) => {
-  const fee = db.prepare('SELECT * FROM fees WHERE id = ?').get(Number(req.params.id));
+app.patch('/api/fees/:id', requireStaff, async (req, res) => {
+  const fee = await db.prepare('SELECT * FROM fees WHERE id = ?').get(Number(req.params.id));
   if (!fee) return res.status(404).json({ error: 'Fee not found.' });
   const price = Number(req.body.price);
   if (!Number.isFinite(price) || price < 0 || price > 1000000) {
     return res.status(400).json({ error: 'Enter a price of 0 or more.' });
   }
-  db.prepare('UPDATE fees SET price = ? WHERE id = ?').run(Math.round(price * 100) / 100, fee.id);
-  res.json(feeRow(db.prepare('SELECT * FROM fees WHERE id = ?').get(fee.id)));
+  await db.prepare('UPDATE fees SET price = ? WHERE id = ?').run(Math.round(price * 100) / 100, fee.id);
+  res.json(feeRow(await db.prepare('SELECT * FROM fees WHERE id = ?').get(fee.id)));
 });
 
-app.delete('/api/fees/:id', requireStaff, (req, res) => {
-  const fee = db.prepare('SELECT * FROM fees WHERE id = ?').get(Number(req.params.id));
+app.delete('/api/fees/:id', requireStaff, async (req, res) => {
+  const fee = await db.prepare('SELECT * FROM fees WHERE id = ?').get(Number(req.params.id));
   if (!fee) return res.status(404).json({ error: 'Fee not found.' });
-  db.prepare('DELETE FROM fees WHERE id = ?').run(fee.id); // only the price row; the document itself is untouched
+  await db.prepare('DELETE FROM fees WHERE id = ?').run(fee.id);
   res.json({ deleted: true });
 });
 
-// ---------- debug: view live data without SSH/Shell access (off unless DEBUG_KEY is set) ----------
-// Render's free tier has no Shell access, so this is a safe way to peek at the deployed
-// database from a browser: visit /api/_debug/data?key=<your DEBUG_KEY>
-// Never returns password_hash. Leave DEBUG_KEY unset in production to disable this entirely.
-app.get('/api/_debug/data', (req, res) => {
+// ---------- debug ----------
+app.get('/api/_debug/data', async (req, res) => {
   if (!process.env.DEBUG_KEY || req.query.key !== process.env.DEBUG_KEY) {
     return res.status(404).json({ error: 'Not found.' });
   }
   res.json({
-    students: db.prepare('SELECT id, name, course, phone_number, must_change_password FROM students').all(),
-    staff: db.prepare('SELECT username, name, department FROM staff').all(),
-    requests: db.prepare('SELECT * FROM requests ORDER BY rowid DESC').all(),
-    official_receipts: db.prepare('SELECT * FROM official_receipts ORDER BY rowid DESC').all(),
-    request_items: db.prepare('SELECT * FROM request_items').all(),
-    request_timeline: db.prepare('SELECT * FROM request_timeline ORDER BY id ASC').all()
+    students: await db.prepare('SELECT id, name, course, phone_number, must_change_password FROM students').all(),
+    staff: await db.prepare('SELECT username, name, department FROM staff').all(),
+    requests: await db.prepare('SELECT * FROM requests ORDER BY rowid DESC').all(),
+    official_receipts: await db.prepare('SELECT * FROM official_receipts ORDER BY rowid DESC').all(),
+    request_items: await db.prepare('SELECT * FROM request_items').all(),
+    request_timeline: await db.prepare('SELECT * FROM request_timeline ORDER BY id ASC').all()
   });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`WUP Registrar System running at http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`WUP Registrar System running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
