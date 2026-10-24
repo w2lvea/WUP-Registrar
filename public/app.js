@@ -295,6 +295,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   renderApp();
   startStaffAutoRefresh();
   initOtpInputs();
+  initDropzone();
   // Fetch EmailJS config from server if not set locally
   if (!localStorage.getItem('wup_emailjs_config')) {
     apiRequest('GET', '/auth/emailjs-config').then(cfg => {
@@ -304,6 +305,37 @@ window.addEventListener('DOMContentLoaded', async () => {
     }).catch(() => { });
   }
 });
+
+function initDropzone() {
+  const dropzone = document.querySelector('#modalNewRequest .dropzone');
+  if (!dropzone) return;
+  ['dragenter', 'dragover'].forEach(name => {
+    dropzone.addEventListener(name, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add('drag-active');
+    });
+  });
+  ['dragleave', 'dragend'].forEach(name => {
+    dropzone.addEventListener(name, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('drag-active');
+    });
+  });
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.classList.remove('drag-active');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const fileInput = document.getElementById('fileAssessment');
+      if (fileInput) {
+        fileInput.files = e.dataTransfer.files;
+        handleAssessmentFileSelected(fileInput);
+      }
+    }
+  });
+}
 
 // ---------- registrar: pick up new student requests without a manual refresh ----------
 let staffRefreshTimer = null;
@@ -1450,7 +1482,7 @@ function renderStudentDashboard() {
   container.innerHTML = list.map(req => {
     const processing = ['processing', 'ready', 'completed'].includes(req.status);
     const ready = ['ready', 'completed'].includes(req.status);
-    const last = req.timeline[req.timeline.length - 1];
+    const last = (req.timeline && req.timeline.length) ? req.timeline[req.timeline.length - 1] : null;
 
     const declined = req.status === 'declined';
     const current = ready ? 'ready' : processing ? 'processing' : 'filed';
@@ -1502,6 +1534,8 @@ async function openNewRequestModal() {
   if (fileInp) fileInp.value = '';
   const fileLbl = document.getElementById('fileAssessmentLabel');
   if (fileLbl) fileLbl.innerText = 'Choose a file (JPG, PNG or PDF)';
+  const prevImg = document.getElementById('assessmentPhotoPreview');
+  if (prevImg) prevImg.src = '';
   hide('assessmentPhotoPreviewContainer');
   show('assessmentUploadIcon');
   uploadedAssessmentPhotoData = '';
@@ -1941,13 +1975,15 @@ function openFullPreview(photo, title, ref) {
   if (!photo) return;
   const win = window.open();
   if (!win) { fancyAlert('Allow pop-ups for this site to open the file preview.', 'Pop-up Blocked', 'info'); return; }
+  win.document.open();
   if (photo.startsWith('data:image')) {
-    win.document.write(`<title>${title} - ${ref}</title><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="${photo}" style="max-width:100%;max-height:100vh;"/></body>`);
+    win.document.write(`<title>${esc(title)} - ${esc(ref)}</title><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="${photo}" style="max-width:100%;max-height:100vh;object-fit:contain;"/></body>`);
   } else if (photo.startsWith('data:')) {
     win.location.href = photo;
   } else {
-    win.document.write(`<title>${title} - ${ref}</title><body style="font-family:sans-serif;padding:2rem;">No previewable file was attached for this request.</body>`);
+    win.document.write(`<title>${esc(title)} - ${esc(ref)}</title><body style="font-family:sans-serif;padding:2rem;">No previewable file was attached for this request.</body>`);
   }
+  win.document.close();
 }
 async function openAssessmentFullPreview(ref) {
   let req = requestsData.find(r => r.ref === ref);

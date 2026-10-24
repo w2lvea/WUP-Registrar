@@ -287,6 +287,7 @@ table.tbl { width: 100%; border-collapse: collapse; text-align: left; }
 
 .dropzone { border: 2px dashed #cfc9e6; border-radius: 14px; padding: 16px; text-align: center; cursor: pointer; transition: border-color .15s ease, background-color .15s ease; }
 .dropzone:hover { border-color: var(--violet); background: #faf8ff; }
+.dropzone.drag-active { border-color: var(--violet); background: #f0eafc; }
 .dropzone i.big { font-size: 26px; color: var(--violet); margin-bottom: 4px; }
 .dropzone img { max-height: 140px; border-radius: 10px; border: 1px solid var(--line); margin-bottom: 8px; }
 .callout { padding: 13px 15px; border-radius: 12px; background: var(--warn-bg); color: #5c4300; font-size: 13.5px; }
